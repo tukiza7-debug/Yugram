@@ -121,7 +121,7 @@ dependencies {
 
     // TDLib - Telegram Database Library JNI bindings
     // Production-ready Maven wrapper for TDLib
-    implementation("io.github.tdlib-android:core:0.1.1")
+    implementation("com.github.tdlibx:td:1.8.56")
 
     // Image loading (Coil) for avatars and media previews
     implementation("io.coil-kt:coil-compose:2.5.0")
