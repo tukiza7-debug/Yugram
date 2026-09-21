@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Telegram Iconic Palette -->
+    <color name="telegram_blue">#2AABEE</color>
+    <color name="telegram_blue_dark">#229ED9</color>
+    <color name="telegram_blue_light">#54B8F0</color>
+    <color name="telegram_accent">#2AABEE</color>
+
+    <!-- Chat Bubble Colors -->
+    <color name="chat_bubble_outgoing">#EFFADE</color>
+    <color name="chat_bubble_outgoing_dark">#1B2A1B</color>
+    <color name="chat_bubble_incoming">#FFFFFF</color>
+    <color name="chat_bubble_incoming_dark">#1E2429</color>
+
+    <!-- Background Colors -->
+    <color name="background_light">#FFFFFF</color>
+    <color name="background_dark">#17212B</color>
+    <color name="surface_light">#F4F4F5</color>
+    <color name="surface_dark">#202B36</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary_light">#000000</color>
+    <color name="text_primary_dark">#FFFFFF</color>
+    <color name="text_secondary_light">#707579</color>
+    <color name="text_secondary_dark">#8A9AA8</color>
+    <color name="text_hint_light">#9AA0A6</color>
+    <color name="text_hint_dark">#6E7B88</color>
+
+    <!-- Divider & Separator -->
+    <color name="divider_light">#E5E7EB</color>
+    <color name="divider_dark">#2B3A4A</color>
+
+    <!-- Status Colors -->
+    <color name="status_online">#4CAF50</color>
+    <color name="status_offline">#9E9E9E</color>
+    <color name="status_error">#F44336</color>
+    <color name="status_warning">#FF9800</color>
+
+    <!-- Unread Badge -->
+    <color name="unread_badge">#2AABEE</color>
+    <color name="unread_badge_muted">#B8B8B8</color>
+    <color name="unread_badge_text">#FFFFFF</color>
+
+    <!-- Selection & Ripple -->
+    <color name="selection_light">#E3F2FD</color>
+    <color name="selection_dark">#1E3A5F</color>
+
+    <!-- Avatar placeholder colors -->
+    <color name="avatar_1">#FF6B6B</color>
+    <color name="avatar_2">#4ECDC4</color>
+    <color name="avatar_3">#45B7D1</color>
+    <color name="avatar_4">#96CEB4</color>
+    <color name="avatar_5">#FFEAA7</color>
+    <color name="avatar_6">#DDA0DD</color>
+    <color name="avatar_7">#98D8C8</color>
+    <color name="avatar_8">#F7DC6F</color>
+</resources>
