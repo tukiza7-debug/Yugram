@@ -47,8 +47,10 @@ jobs:
       - name: Dump TdApi public signatures (debug)
         if: failure()
         run: |
-          find ~/.gradle/caches -name "*.jar" -path "*tdlib-android*" -exec sh -c 'unzip -o -d /tmp/tdlib_dump "$1"' _ {} \;
+          find ~/.gradle/caches -name "*.aar" -path "*tdlib*" -exec sh -c 'mkdir -p /tmp/tdlib_dump && unzip -o -d /tmp/tdlib_dump "$1"' _ {} \;
+          unzip -o -d /tmp/tdlib_dump /tmp/tdlib_dump/classes.jar
           javap -public /tmp/tdlib_dump/org/drinkless/tdlib/TdApi\$*.class > tdapi_signatures.txt 2>&1 || true
+          javap -public /tmp/tdlib_dump/org/drinkless/tdlib/Client.class >> tdapi_signatures.txt 2>&1 || true
       - name: Upload TdApi signatures
         if: failure()
         uses: actions/upload-artifact@v4

@@ -384,13 +384,13 @@ object TdLibModelConverter {
                 val textContent = content as TdApi.MessageText
                 MessageContent.Text(
                     text = textContent.text.text,
-                    webPage = textContent.webPage?.let { webPage ->
+                    webPage = textContent.linkPreview?.let { linkPreview ->
                         WebPageInfo(
-                            url = webPage.url,
-                            title = webPage.title,
-                            description = webPage.description,
-                            siteName = webPage.siteName,
-                            photo = webPage.photo
+                            url = linkPreview.url,
+                            title = linkPreview.title,
+                            description = linkPreview.description,
+                            siteName = linkPreview.siteName,
+                            photo = linkPreview.photo
                         )
                     }
                 )
@@ -469,10 +469,10 @@ object TdLibModelConverter {
                 val pollContent = content as TdApi.MessagePoll
                 val poll = pollContent.poll
                 MessageContent.Poll(
-                    question = poll.question,
+                    question = poll.question.text,
                     options = poll.options.map { option ->
                         PollOption(
-                            text = option.text,
+                            text = option.text.text,
                             voterCount = option.voterCount,
                             isChosen = option.isChosen,
                             isBeingChosen = option.isBeingChosen
@@ -521,13 +521,13 @@ object TdLibModelConverter {
                 UserStatus.Offline((status as TdApi.UserStatusOffline).wasOnline)
             }
             TdApi.UserStatusRecently.CONSTRUCTOR -> {
-                UserStatus.Recently((status as TdApi.UserStatusRecently).isHidden)
+                UserStatus.Recently((status as TdApi.UserStatusRecently).byMyPrivacySettings)
             }
             TdApi.UserStatusLastWeek.CONSTRUCTOR -> {
-                UserStatus.LastWeek((status as TdApi.UserStatusLastWeek).isHidden)
+                UserStatus.LastWeek((status as TdApi.UserStatusLastWeek).byMyPrivacySettings)
             }
             TdApi.UserStatusLastMonth.CONSTRUCTOR -> {
-                UserStatus.LastMonth((status as TdApi.UserStatusLastMonth).isHidden)
+                UserStatus.LastMonth((status as TdApi.UserStatusLastMonth).byMyPrivacySettings)
             }
             TdApi.UserStatusEmpty.CONSTRUCTOR -> UserStatus.Empty
             else -> UserStatus.Empty
