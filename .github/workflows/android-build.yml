@@ -43,3 +43,15 @@ jobs:
         with:
           name: app-debug-apk-${{ github.run_number }}
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Dump TdApi public signatures (debug)
+        if: failure()
+        run: |
+          find ~/.gradle/caches -name "*.jar" -path "*tdlib-android*" -exec sh -c 'unzip -o -d /tmp/tdlib_dump "$1"' _ {} \;
+          javap -public /tmp/tdlib_dump/org/drinkless/tdlib/TdApi\$*.class > tdapi_signatures.txt 2>&1 || true
+      - name: Upload TdApi signatures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdapi-signatures
+          path: tdapi_signatures.txt
