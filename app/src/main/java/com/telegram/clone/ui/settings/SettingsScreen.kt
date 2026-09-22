@@ -33,6 +33,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -41,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +58,7 @@ import com.telegram.clone.data.repository.TelegramRepository
 import com.telegram.clone.ui.theme.TelegramBlue
 import com.telegram.clone.ui.theme.TelegramCloneTheme
 import com.telegram.clone.ui.theme.TelegramTextStyles
+import kotlinx.coroutines.launch
 
 
 /**
@@ -65,11 +69,16 @@ import com.telegram.clone.ui.theme.TelegramTextStyles
 @Composable
 fun SettingsScreen(
     onBackClick: () -> Unit,
-    onProfileClick: () -> Unit,
-    onComingSoon: () -> Unit = {}
+    onProfileClick: () -> Unit
 ) {
     val repository = remember { TelegramRepository.getInstance() }
     val currentUser by repository.currentUser.collectAsState(initial = null)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val showComingSoon = {
+        scope.launch { snackbarHostState.showSnackbar("Coming soon") }
+        Unit
+    }
 
     TelegramCloneTheme {
         Scaffold(
@@ -97,6 +106,7 @@ fun SettingsScreen(
                     )
                 )
             },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = MaterialTheme.colorScheme.background
         ) { innerPadding ->
             Column(
@@ -122,28 +132,28 @@ fun SettingsScreen(
                         iconBg = 0xFF2AABEE.toInt(),
                         title = stringResource(R.string.settings_account),
                         subtitle = stringResource(R.string.settings_account_subtitle),
-                        onClick = onComingSoon
+                        onClick = showComingSoon
                     )
                     SettingsItem(
                         icon = Icons.Default.Notifications,
                         iconBg = 0xFFFF9500.toInt(),
                         title = stringResource(R.string.settings_notifications),
                         subtitle = stringResource(R.string.settings_notifications_subtitle),
-                        onClick = onComingSoon
+                        onClick = showComingSoon
                     )
                     SettingsItem(
                         icon = Icons.Default.Lock,
                         iconBg = 0xFF8E8E93.toInt(),
                         title = stringResource(R.string.settings_privacy),
                         subtitle = stringResource(R.string.settings_privacy_subtitle),
-                        onClick = onComingSoon
+                        onClick = showComingSoon
                     )
                     SettingsItem(
                         icon = Icons.Default.Devices,
                         iconBg = 0xFF34C759.toInt(),
                         title = stringResource(R.string.settings_devices),
                         subtitle = "Active sessions",
-                        onClick = onComingSoon
+                        onClick = showComingSoon
                     )
                 }
 
@@ -156,21 +166,21 @@ fun SettingsScreen(
                         iconBg = 0xFF5856D6.toInt(),
                         title = stringResource(R.string.settings_data),
                         subtitle = stringResource(R.string.settings_data_subtitle),
-                        onClick = onComingSoon
+                        onClick = showComingSoon
                     )
                     SettingsItem(
                         icon = Icons.Default.Palette,
                         iconBg = 0xFFAF52DE.toInt(),
                         title = stringResource(R.string.settings_appearance),
                         subtitle = stringResource(R.string.settings_appearance_subtitle),
-                        onClick = onComingSoon
+                        onClick = showComingSoon
                     )
                     SettingsItem(
                         icon = Icons.Default.Language,
                         iconBg = 0xFFFF3B30.toInt(),
                         title = stringResource(R.string.settings_language),
                         subtitle = stringResource(R.string.settings_language_subtitle),
-                        onClick = onComingSoon
+                        onClick = showComingSoon
                     )
                 }
 
@@ -183,7 +193,7 @@ fun SettingsScreen(
                         iconBg = 0xFF007AFF.toInt(),
                         title = stringResource(R.string.settings_about),
                         subtitle = stringResource(R.string.settings_about_subtitle),
-                        onClick = onComingSoon
+                        onClick = showComingSoon
                     )
                 }
 
