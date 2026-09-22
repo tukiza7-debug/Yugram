@@ -182,7 +182,7 @@ class TDLibClientManager private constructor() {
      * Closes the TDLib client and releases all resources.
      */
     suspend fun close() = clientMutex.withLock {
-        tdClient?.close()
+        tdClient?.send(TdApi.Close(), resultHandler)
         tdClient = null
         pendingRequests.clear()
         _authorizationState.value = null
@@ -273,11 +273,8 @@ class TDLibClientManager private constructor() {
                 sendTdlibParameters()
             }
 
-            // State 2: TDLib needs encryption key to open the database
-            TdApi.AuthorizationStateWaitEncryptionKey.CONSTRUCTOR -> {
-                Log.i(TAG, "State: WaitEncryptionKey - sending default encryption key")
-                sendEncryptionKey()
-            }
+            // State 2: (removed) AuthorizationStateWaitEncryptionKey was removed in TDLib 1.8.x;
+            // the database encryption key is now provided via SetTdlibParameters.databaseEncryptionKey.
 
             // State 3: TDLib needs phone number from user
             TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR -> {
@@ -342,9 +339,10 @@ class TDLibClientManager private constructor() {
             Log.e(TAG, "Failed to create TDLib directories", e)
         }
 
-        val parameters = TdApi.TdlibParameters().apply {
+        val parameters = TdApi.SetTdlibParameters().apply {
             databaseDirectory = databaseDir
             filesDirectory = filesDir
+            databaseEncryptionKey = ByteArray(0)
             useMessageDatabase = TelegramConfig.USE_MESSAGE_DATABASE
             useSecretChats = TelegramConfig.USE_SECRET_CHATS
             useFileDatabase = TelegramConfig.USE_FILE_DATABASE
@@ -355,27 +353,12 @@ class TDLibClientManager private constructor() {
             deviceModel = TelegramConfig.getDeviceModel()
             systemVersion = TelegramConfig.getSystemVersion()
             applicationVersion = TelegramConfig.APPLICATION_VERSION
-            enableStorageOptimizer = true
-            ignoreFileNames = false
         }
 
         tdClient?.send(
-            TdApi.SetTdlibParameters(parameters),
+            parameters,
             resultHandler
         ) ?: Log.e(TAG, "Cannot send parameters: tdClient is null")
-    }
-
-    /**
-     * State 2: Sends the encryption key to unlock the local database.
-     * Uses an empty key by default (database is stored in app-private storage).
-     */
-    private fun sendEncryptionKey() {
-        // Using empty encryption key - database is protected by Android's app sandbox
-        // For enhanced security, consider using Android Keystore to generate a key
-        tdClient?.send(
-            TdApi.CheckDatabaseEncryptionKey(ByteArray(0)),
-            resultHandler
-        ) ?: Log.e(TAG, "Cannot send encryption key: tdClient is null")
     }
 
     /**
@@ -557,11 +540,17 @@ class TDLibClientManager private constructor() {
         inputMessageContent: TdApi.InputMessageContent,
         callback: (TdApi.Object) -> Unit = {}
     ) {
+        val replyTo: TdApi.InputMessageReplyTo? = if (replyToMessageId != 0L) {
+            TdApi.InputMessageReplyToMessage(replyToMessageId, null, 0)
+        } else {
+            null
+        }
+
         tdClient?.send(
             TdApi.SendMessage(
                 chatId,
-                messageThreadId,
-                replyToMessageId,
+                null,
+                replyTo,
                 options,
                 replyMarkup,
                 inputMessageContent
@@ -587,7 +576,6 @@ class TDLibClientManager private constructor() {
         val inputText = TdApi.InputMessageText(
             TdApi.FormattedText(text, emptyArray()),
             null,
-            false,
             false
         )
         sendMessage(
@@ -670,8 +658,8 @@ class TDLibClientManager private constructor() {
     fun getFile(
         fileId: Int,
         priority: Int = 16,
-        offset: Int = 0,
-        limit: Int = 0,
+        offset: Long = 0,
+        limit: Long = 0,
         synchronous: Boolean = false,
         callback: (TdApi.Object) -> Unit
     ) {
@@ -693,12 +681,11 @@ class TDLibClientManager private constructor() {
      */
     fun viewMessages(
         chatId: Long,
-        messageThreadId: Long = 0,
         messageIds: LongArray,
         forceRead: Boolean = true
     ) {
         tdClient?.send(
-            TdApi.ViewMessages(chatId, messageThreadId, messageIds, forceRead),
+            TdApi.ViewMessages(chatId, messageIds, TdApi.MessageSourceChatHistory(), forceRead),
             resultHandler
         ) ?: Log.e(TAG, "Cannot view messages: tdClient is null")
     }
@@ -736,11 +723,10 @@ class TDLibClientManager private constructor() {
      */
     fun sendChatAction(
         chatId: Long,
-        messageThreadId: Long = 0,
         action: TdApi.ChatAction = TdApi.ChatActionTyping()
     ) {
         tdClient?.send(
-            TdApi.SendChatAction(chatId, messageThreadId, action),
+            TdApi.SendChatAction(chatId, null, "", action),
             resultHandler
         ) ?: Log.e(TAG, "Cannot send chat action: tdClient is null")
     }
@@ -756,7 +742,7 @@ class TDLibClientManager private constructor() {
      * @param function The TDLib function to execute
      * @return The result object
      */
-    fun execute(function: TdApi.Function): TdApi.Object {
+    fun execute(function: TdApi.Function<TdApi.Object>): TdApi.Object {
         return Client.execute(function)
     }
 
@@ -766,7 +752,7 @@ class TDLibClientManager private constructor() {
      * @param function The TDLib function to send
      * @param callback Callback receiving the result
      */
-    fun sendFunction(function: TdApi.Function, callback: (TdApi.Object) -> Unit = {}) {
+    fun sendFunction(function: TdApi.Function<TdApi.Object>, callback: (TdApi.Object) -> Unit = {}) {
         tdClient?.send(
             function,
             Client.ResultHandler { result ->

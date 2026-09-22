@@ -83,13 +83,13 @@ class TelegramRepository private constructor() {
     val connectionState: StateFlow<TdApi.ConnectionState?> = tdLibClient.connectionState
 
     /** New message events */
-    val newMessageFlow: SharedFlow<TdApi.UpdateNewMessage> = tdLibClient.newMessageFlow.asSharedFlow()
+    val newMessageFlow: SharedFlow<TdApi.UpdateNewMessage> = tdLibClient.newMessageFlow
 
     /** User status change events */
-    val userStatusFlow: SharedFlow<TdApi.UpdateUserStatus> = tdLibClient.userStatusFlow.asSharedFlow()
+    val userStatusFlow: SharedFlow<TdApi.UpdateUserStatus> = tdLibClient.userStatusFlow
 
     /** Error events */
-    val errorFlow: SharedFlow<TdApi.Error> = tdLibClient.errorFlow.asSharedFlow()
+    val errorFlow: SharedFlow<TdApi.Error> = tdLibClient.errorFlow
 
     // ============================================================
     // Initialization
@@ -146,13 +146,6 @@ class TelegramRepository private constructor() {
                 val unreadUpdate = update as TdApi.UpdateChatIsMarkedAsUnread
                 chatCache[unreadUpdate.chatId]?.let { chat ->
                     chat.isMarkedAsUnread = unreadUpdate.isMarkedAsUnread
-                    rebuildChatList()
-                }
-            }
-            TdApi.UpdateChatIsPinned.CONSTRUCTOR -> {
-                val pinnedUpdate = update as TdApi.UpdateChatIsPinned
-                chatCache[pinnedUpdate.chatId]?.let { chat ->
-                    // Update positions list
                     rebuildChatList()
                 }
             }
@@ -257,21 +250,13 @@ class TelegramRepository private constructor() {
         val avatarPhoto = when (chatType) {
             ChatType.PRIVATE -> {
                 val userId = (chat.type as TdApi.ChatTypePrivate).userId
-                getUser(userId)?.profilePhoto?.let { photo ->
-                    TdLibModelConverter.getSmallPhotoFile(photo)
-                }
+                getUser(userId)?.profilePhoto?.small
             }
             ChatType.SECRET -> {
                 val userId = (chat.type as TdApi.ChatTypeSecret).userId
-                getUser(userId)?.profilePhoto?.let { photo ->
-                    TdLibModelConverter.getSmallPhotoFile(photo)
-                }
+                getUser(userId)?.profilePhoto?.small
             }
-            else -> {
-                chat.photo?.let { photo ->
-                    TdLibModelConverter.getSmallPhotoFile(photo.small)
-                }
-            }
+            else -> chat.photo?.small
         }
 
         return ChatItem(
@@ -289,7 +274,7 @@ class TelegramRepository private constructor() {
             senderName = senderName,
             isOutgoing = isOutgoing,
             messageSendingState = chat.lastMessage?.let { convertMessageSendingState(it.sendingState) },
-            draftMessage = chat.draftMessage?.inputMessageText?.text?.text
+            draftMessage = chat.draftMessage?.inputMessageText?.let { (it as? TdApi.InputMessageText)?.text?.text }
         )
     }
 
@@ -411,9 +396,7 @@ class TelegramRepository private constructor() {
         val avatarPhoto = when (message.senderId.constructor) {
             TdApi.MessageSenderUser.CONSTRUCTOR -> {
                 val userId = (message.senderId as TdApi.MessageSenderUser).userId
-                getUser(userId)?.profilePhoto?.let { photo ->
-                    TdLibModelConverter.getSmallPhotoFile(photo)
-                }
+                getUser(userId)?.profilePhoto?.small
             }
             else -> null
         }
@@ -426,7 +409,7 @@ class TelegramRepository private constructor() {
         }
 
         val sendingState = convertMessageSendingState(message.sendingState)
-        val isRead = message.interactionInfo?.isRead ?: (message.sendingState == null && !isOutgoing)
+        val isRead = message.sendingState == null && !isOutgoing
 
         return MessageItem(
             messageId = message.id,
@@ -440,7 +423,7 @@ class TelegramRepository private constructor() {
             date = message.date,
             isOutgoing = isOutgoing,
             isEdited = message.editDate != 0,
-            replyToMessageId = message.replyTo?.messageId ?: 0,
+            replyToMessageId = (message.replyTo as? TdApi.MessageReplyToMessage)?.messageId ?: 0,
             forwardInfo = forwardInfo,
             sendingState = sendingState,
             isRead = isRead,
@@ -450,25 +433,25 @@ class TelegramRepository private constructor() {
         )
     }
 
-    private fun convertMessageForwardOrigin(origin: TdApi.MessageForwardOrigin): MessageForwardOrigin {
+    private fun convertMessageForwardOrigin(origin: TdApi.MessageOrigin): MessageForwardOrigin {
         return when (origin.constructor) {
-            TdApi.MessageForwardOriginUser.CONSTRUCTOR -> {
-                val userOrigin = origin as TdApi.MessageForwardOriginUser
+            TdApi.MessageOriginUser.CONSTRUCTOR -> {
+                val userOrigin = origin as TdApi.MessageOriginUser
                 MessageForwardOrigin.User(
                     userId = userOrigin.senderUserId,
                     userName = ""
                 )
             }
-            TdApi.MessageForwardOriginChat.CONSTRUCTOR -> {
-                val chatOrigin = origin as TdApi.MessageForwardOriginChat
+            TdApi.MessageOriginChat.CONSTRUCTOR -> {
+                val chatOrigin = origin as TdApi.MessageOriginChat
                 MessageForwardOrigin.Chat(
                     chatId = chatOrigin.senderChatId,
                     chatName = "",
                     authorSignature = chatOrigin.authorSignature
                 )
             }
-            TdApi.MessageForwardOriginChannel.CONSTRUCTOR -> {
-                val channelOrigin = origin as TdApi.MessageForwardOriginChannel
+            TdApi.MessageOriginChannel.CONSTRUCTOR -> {
+                val channelOrigin = origin as TdApi.MessageOriginChannel
                 MessageForwardOrigin.Channel(
                     chatId = channelOrigin.chatId,
                     chatName = "",
@@ -476,13 +459,9 @@ class TelegramRepository private constructor() {
                     authorSignature = channelOrigin.authorSignature
                 )
             }
-            TdApi.MessageForwardOriginHiddenUser.CONSTRUCTOR -> {
-                val hiddenOrigin = origin as TdApi.MessageForwardOriginHiddenUser
+            TdApi.MessageOriginHiddenUser.CONSTRUCTOR -> {
+                val hiddenOrigin = origin as TdApi.MessageOriginHiddenUser
                 MessageForwardOrigin.HiddenUser(senderName = hiddenOrigin.senderName)
-            }
-            TdApi.MessageForwardOriginMessageImport.CONSTRUCTOR -> {
-                val importOrigin = origin as TdApi.MessageForwardOriginMessageImport
-                MessageForwardOrigin.MessageImport(senderName = importOrigin.senderName)
             }
             else -> MessageForwardOrigin.HiddenUser(senderName = "Unknown")
         }
@@ -633,14 +612,14 @@ class TelegramRepository private constructor() {
             username = user.usernames?.activeUsernames?.firstOrNull(),
             phoneNumber = user.phoneNumber,
             bio = null, // Requires getUserFullInfo
-            avatarPhoto = user.profilePhoto?.let { TdLibModelConverter.getSmallPhotoFile(it) },
+            avatarPhoto = user.profilePhoto?.small,
             status = TdLibModelConverter.convertUserStatus(user.status),
             isContact = user.isContact,
             isMutualContact = user.isMutualContact,
-            isVerified = user.isVerified,
+            isVerified = user.verificationStatus?.isVerified ?: false,
             isSupport = user.isSupport,
-            isScam = user.isScam,
-            isFake = user.isFake,
+            isScam = user.verificationStatus?.isScam ?: false,
+            isFake = user.verificationStatus?.isFake ?: false,
             haveAccess = user.haveAccess,
             languageCode = user.languageCode
         )
