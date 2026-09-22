@@ -23,6 +23,9 @@ import com.telegram.clone.data.repository.TelegramRepository
 import com.telegram.clone.ui.auth.LoginScreen
 import com.telegram.clone.ui.chat.ChatRoomScreen
 import com.telegram.clone.ui.home.ChatListScreen
+import com.telegram.clone.ui.newchat.NewChatScreen
+import com.telegram.clone.ui.profile.ProfileScreen
+import com.telegram.clone.ui.settings.SettingsScreen
 import com.telegram.clone.ui.theme.TelegramCloneTheme
 import kotlinx.coroutines.flow.collectLatest
 import org.drinkless.tdlib.TdApi
@@ -89,8 +92,15 @@ fun TelegramCloneApp() {
                 onChatClick = { chatId ->
                     navController.navigate(Screen.ChatRoom.createRoute(chatId))
                 },
-                onProfileClick = { /* TODO: Navigate to profile */ },
-                onNewChatClick = { /* TODO: Navigate to new chat */ }
+                onProfileClick = {
+                    navController.navigate(Screen.Profile.route)
+                },
+                onSettingsClick = {
+                    navController.navigate(Screen.Settings.route)
+                },
+                onNewChatClick = {
+                    navController.navigate(Screen.NewChat.route)
+                }
             )
         }
 
@@ -101,6 +111,27 @@ fun TelegramCloneApp() {
             val chatId = backStackEntry.arguments?.getLong("chatId") ?: 0L
             ChatRoomScreen(
                 chatId = chatId,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onBackClick = { navController.popBackStack() },
+                onProfileClick = {
+                    navController.navigate(Screen.Profile.route)
+                }
+            )
+        }
+
+        composable(Screen.Profile.route) {
+            ProfileScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.NewChat.route) {
+            NewChatScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }
@@ -147,4 +178,10 @@ sealed class Screen(val route: String) {
                 }
             )
     }
+
+    object Profile : Screen("profile")
+
+    object Settings : Screen("settings")
+
+    object NewChat : Screen("new_chat")
 }

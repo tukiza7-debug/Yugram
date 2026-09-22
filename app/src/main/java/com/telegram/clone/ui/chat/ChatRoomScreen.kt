@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.telegram.clone.R
+import kotlinx.coroutines.launch
 import com.telegram.clone.data.model.MessageContent
 import com.telegram.clone.data.model.MessageItem
 import com.telegram.clone.data.model.UserStatus
@@ -102,6 +103,15 @@ fun ChatRoomScreen(
     val inputText by viewModel.inputText.collectAsState()
     val listState = rememberLazyListState()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    val showComingSoon = {
+        scope.launch {
+            snackbarHostState.showSnackbar("Coming soon")
+        }
+        Unit
+    }
 
     // Initialize ViewModel with chat ID
     LaunchedEffect(chatId) {
@@ -117,12 +127,16 @@ fun ChatRoomScreen(
 
     TelegramCloneTheme {
         Scaffold(
+            snackbarHost = {
+                androidx.compose.material3.SnackbarHost(hostState = snackbarHostState)
+            },
             topBar = {
                 ChatRoomTopBar(
                     title = uiState.chatTitle,
                     subtitle = viewModel.getUserStatusText(),
                     userStatus = uiState.userProfile?.status,
-                    onBackClick = onBackClick
+                    onBackClick = onBackClick,
+                    onActionClick = showComingSoon
                 )
             },
             bottomBar = {
@@ -133,8 +147,8 @@ fun ChatRoomScreen(
                         viewModel.sendMessage()
                         keyboardController?.hide()
                     },
-                    onAttachClick = { /* TODO: Attach media */ },
-                    onVoiceClick = { /* TODO: Voice message */ }
+                    onAttachClick = showComingSoon,
+                    onVoiceClick = showComingSoon
                 )
             },
             containerColor = ChatBubbleColors.chatBackground()
@@ -171,7 +185,8 @@ private fun ChatRoomTopBar(
     title: String,
     subtitle: String,
     userStatus: UserStatus?,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onActionClick: () -> Unit
 ) {
     TopAppBar(
         title = {
@@ -224,21 +239,21 @@ private fun ChatRoomTopBar(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
-            IconButton(onClick = { /* TODO: Voice call */ }) {
+            IconButton(onClick = onActionClick) {
                 Icon(
                     imageVector = Icons.Default.Phone,
                     contentDescription = "Call",
                     tint = Color.White
                 )
             }
-            IconButton(onClick = { /* TODO: Video call */ }) {
+            IconButton(onClick = onActionClick) {
                 Icon(
                     imageVector = Icons.Default.Videocam,
                     contentDescription = "Video call",
                     tint = Color.White
                 )
             }
-            IconButton(onClick = { /* TODO: More options */ }) {
+            IconButton(onClick = onActionClick) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "More",

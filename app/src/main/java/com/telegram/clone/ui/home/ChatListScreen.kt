@@ -2,6 +2,7 @@ package com.telegram.clone.ui.home
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
@@ -91,12 +93,23 @@ import kotlinx.coroutines.launch
 fun ChatListScreen(
     onChatClick: (Long) -> Unit,
     onProfileClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     onNewChatClick: () -> Unit,
     viewModel: ChatListViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    var showSearch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showMoreMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    val showComingSoon = {
+        scope.launch {
+            snackbarHostState.showSnackbar("Coming soon")
+        }
+        Unit
+    }
 
     TelegramCloneTheme {
         ModalNavigationDrawer(
@@ -108,6 +121,20 @@ fun ChatListScreen(
                         scope.launch { drawerState.close() }
                         onProfileClick()
                     },
+                    onSettingsClick = {
+                        scope.launch { drawerState.close() }
+                        onSettingsClick()
+                    },
+                    onSavedMessages = {
+                        scope.launch { drawerState.close() }
+                        onNewChatClick()
+                    },
+                    onComingSoon = {
+                        scope.launch {
+                            drawerState.close()
+                            snackbarHostState.showSnackbar("Coming soon")
+                        }
+                    },
                     onLogOut = {
                         scope.launch { drawerState.close() }
                         viewModel.logOut()
@@ -116,6 +143,9 @@ fun ChatListScreen(
             }
         ) {
             Scaffold(
+                snackbarHost = {
+                    androidx.compose.material3.SnackbarHost(hostState = snackbarHostState)
+                },
                 topBar = {
                     TopAppBar(
                         title = {
@@ -137,18 +167,44 @@ fun ChatListScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { /* TODO: Open search */ }) {
+                            IconButton(onClick = { showSearch = !showSearch }) {
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = "Search",
                                     tint = Color.White
                                 )
                             }
-                            IconButton(onClick = { /* TODO: More options */ }) {
+                            IconButton(onClick = { showMoreMenu = true }) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
                                     contentDescription = "More",
                                     tint = Color.White
+                                )
+                            }
+                            androidx.compose.material3.DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false }
+                            ) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_new_group)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        scope.launch { snackbarHostState.showSnackbar("Coming soon") }
+                                    }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_settings)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        onSettingsClick()
+                                    }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_log_out)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.logOut()
+                                    }
                                 )
                             }
                         },
@@ -186,11 +242,60 @@ fun ChatListScreen(
                         ConnectionStatusBar(statusText = viewModel.getConnectionStatusText())
                     }
 
-                    // Search bar
-                    ChatSearchBar(
-                        query = uiState.searchQuery,
-                        onQueryChange = viewModel::onSearchQueryChanged
-                    )
+                    // Search bar (interactive)
+                    if (showSearch) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = uiState.searchQuery,
+                                    onValueChange = viewModel::onSearchQueryChanged,
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = {
+                                        Text(
+                                            text = stringResource(R.string.search_placeholder),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                                        unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                                        cursorColor = TelegramBlue
+                                    )
+                                )
+                                if (uiState.searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Chat list content
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -239,46 +344,6 @@ private fun ConnectionStatusBar(statusText: String) {
                 text = statusText,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ChatSearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = if (query.isBlank()) stringResource(R.string.chat_list_search) else query,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (query.isBlank()) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -371,7 +436,7 @@ private fun ChatListItem(
             .fillMaxWidth()
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = { /* TODO: Show context menu */ }
+                onLongClick = { /* Context menu — future feature */ }
             )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -385,7 +450,7 @@ private fun ChatListItem(
 
             // Online indicator dot for private chats
             if (chat.chatType == ChatType.PRIVATE || chat.chatType == ChatType.SECRET) {
-                // TODO: Add actual online status indicator when user status is available
+                // Online status indicator placeholder
             }
         }
 
@@ -616,6 +681,9 @@ private fun UnreadBadge(
 private fun NavigationDrawerContent(
     currentUser: org.drinkless.tdlib.TdApi.User?,
     onProfileClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onSavedMessages: () -> Unit,
+    onComingSoon: () -> Unit,
     onLogOut: () -> Unit
 ) {
     Surface(
@@ -686,11 +754,11 @@ private fun NavigationDrawerContent(
 
             // Drawer items
             DrawerItem(icon = "👤", label = "Profile", onClick = onProfileClick)
-            DrawerItem(icon = "👥", label = "New Group", onClick = { /* TODO */ })
-            DrawerItem(icon = "📞", label = "Contacts", onClick = { /* TODO */ })
-            DrawerItem(icon = "📞", label = "Calls", onClick = { /* TODO */ })
-            DrawerItem(icon = "🔖", label = "Saved Messages", onClick = { /* TODO */ })
-            DrawerItem(icon = "⚙️", label = "Settings", onClick = { /* TODO */ })
+            DrawerItem(icon = "👥", label = "New Group", onClick = onComingSoon)
+            DrawerItem(icon = "📞", label = "Contacts", onClick = onComingSoon)
+            DrawerItem(icon = "📞", label = "Calls", onClick = onComingSoon)
+            DrawerItem(icon = "🔖", label = "Saved Messages", onClick = onSavedMessages)
+            DrawerItem(icon = "⚙️", label = "Settings", onClick = onSettingsClick)
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -701,7 +769,6 @@ private fun NavigationDrawerContent(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerItem(
     icon: String,
@@ -711,7 +778,7 @@ private fun DrawerItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
