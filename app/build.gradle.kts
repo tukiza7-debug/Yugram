@@ -31,6 +31,25 @@ android {
         )
     }
 
+    signingConfigs {
+        create("release") {
+            // Credentials are injected via ORG_GRADLE_PROJECT_* env vars in CI,
+            // or via -P... on the command line for local builds. When absent
+            // (e.g. a plain local build), this block is a no-op and the debug
+            // build type keeps using the default debug keystore.
+            val keystorePath = project.findProperty("SIGNING_KEYSTORE_PATH") as? String
+            val storePassword = project.findProperty("SIGNING_STORE_PASSWORD") as? String
+            val keyAlias = project.findProperty("SIGNING_KEY_ALIAS") as? String
+            val keyPassword = project.findProperty("SIGNING_KEY_PASSWORD") as? String
+            if (keystorePath != null && file(keystorePath).exists()) {
+                storeFile = file(keystorePath)
+                this.storePassword = storePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -38,6 +57,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             isMinifyEnabled = false
