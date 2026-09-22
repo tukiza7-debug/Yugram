@@ -13,6 +13,7 @@ import com.telegram.clone.data.model.TdLibModelConverter
 import com.telegram.clone.data.model.UserProfile
 import com.telegram.clone.data.model.UserStatus
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.drinkless.tdlib.TdApi
 import java.util.concurrent.ConcurrentHashMap
 
@@ -39,6 +41,9 @@ class TelegramRepository private constructor() {
 
     companion object {
         private const val TAG = "TelegramRepository"
+
+        /** Per-call timeout (ms) for single TDLib fetches, to avoid indefinite hangs. */
+        private const val TDLIB_CALL_TIMEOUT_MS = 10_000L
 
         @Volatile
         private var INSTANCE: TelegramRepository? = null
@@ -221,6 +226,12 @@ class TelegramRepository private constructor() {
      */
     fun loadChats(limit: Int = 100) {
         coroutineScope.launch {
+            // Don't flip the loading flag (which would leave a spinner stuck forever)
+            // if TDLib isn't initialized yet — the UI retries this once auth is Ready.
+            if (!tdLibClient.isInitialized()) {
+                _isLoadingChats.value = false
+                return@launch
+            }
             _isLoadingChats.value = true
             tdLibClient.loadChats(limit = limit) { result ->
                 coroutineScope.launch {
@@ -580,24 +591,30 @@ class TelegramRepository private constructor() {
 
     /**
      * Gets a user from cache or fetches from TDLib if not cached.
+     *
+     * Uses a CompletableDeferred with a timeout instead of a manually-locked
+     * Mutex: the previous Mutex(true) + lock() pattern would suspend forever
+     * (freezing the chat list / chat room) if the TDLib callback never fired —
+     * e.g. when the native client wasn't initialized yet, or on error paths.
      */
     suspend fun getUser(userId: Long): TdApi.User? {
-        return userCache[userId] ?: run {
-            var result: TdApi.User? = null
-            val mutex = Mutex(true)
-            tdLibClient.getUser(userId) { obj ->
-                coroutineScope.launch {
-                    if (obj.constructor == TdApi.User.CONSTRUCTOR) {
-                        val user = obj as TdApi.User
-                        userCache[userId] = user
-                        result = user
-                    }
-                    mutex.unlock()
+        userCache[userId]?.let { return it }
+        if (!tdLibClient.isInitialized()) return null
+
+        val deferred = CompletableDeferred<TdApi.User?>()
+        tdLibClient.getUser(userId) { obj ->
+            coroutineScope.launch {
+                val user = if (obj.constructor == TdApi.User.CONSTRUCTOR) {
+                    val u = obj as TdApi.User
+                    userCache[userId] = u
+                    u
+                } else {
+                    null
                 }
+                deferred.complete(user)
             }
-            mutex.lock()
-            result
         }
+        return withTimeoutOrNull(TDLIB_CALL_TIMEOUT_MS) { deferred.await() }
     }
 
     /**
@@ -635,23 +652,28 @@ class TelegramRepository private constructor() {
 
     /**
      * Gets a chat from cache or fetches it.
+     *
+     * Uses a CompletableDeferred + timeout (see [getUser] for rationale) to
+     * avoid the permanent suspension the old Mutex(true) pattern caused when
+     * the TDLib callback never fired.
      */
     suspend fun getChat(chatId: Long): TdApi.Chat? {
-        return chatCache[chatId] ?: run {
-            var result: TdApi.Chat? = null
-            val mutex = Mutex(true)
-            tdLibClient.getChat(chatId) { obj ->
-                coroutineScope.launch {
-                    if (obj.constructor == TdApi.Chat.CONSTRUCTOR) {
-                        val chat = obj as TdApi.Chat
-                        chatCache[chatId] = chat
-                        result = chat
-                    }
-                    mutex.unlock()
+        chatCache[chatId]?.let { return it }
+        if (!tdLibClient.isInitialized()) return null
+
+        val deferred = CompletableDeferred<TdApi.Chat?>()
+        tdLibClient.getChat(chatId) { obj ->
+            coroutineScope.launch {
+                val chat = if (obj.constructor == TdApi.Chat.CONSTRUCTOR) {
+                    val c = obj as TdApi.Chat
+                    chatCache[chatId] = c
+                    c
+                } else {
+                    null
                 }
+                deferred.complete(chat)
             }
-            mutex.lock()
-            result
         }
+        return withTimeoutOrNull(TDLIB_CALL_TIMEOUT_MS) { deferred.await() }
     }
 }

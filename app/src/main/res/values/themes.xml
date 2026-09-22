@@ -15,6 +15,13 @@
         <item name="android:windowBackground">@color/background_light</item>
         <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <!--
+            With targetSdk 36, Android 15+ enforces edge-to-edge (content draws
+            behind system bars) by default. The screens are not yet inset-aware,
+            so opt out to keep the classic status/nav bar background behavior and
+            avoid buttons/inputs being hidden behind the navigation bar.
+        -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
     </style>
 
     <style name="Theme.TelegramClone.Dark" parent="android:Theme.Material.NoActionBar">
@@ -26,6 +33,7 @@
         <item name="android:windowBackground">@color/background_dark</item>
         <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
     </style>
 
     <!-- Splash screen theme -->

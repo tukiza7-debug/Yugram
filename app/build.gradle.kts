@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.telegram.clone"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.telegram.clone"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = (project.findProperty("APP_VERSION_CODE") as String?)?.toIntOrNull() ?: 1
         versionName = project.findProperty("APP_VERSION_NAME") as String? ?: "1.0.0"
 
