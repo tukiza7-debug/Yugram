@@ -179,8 +179,9 @@ fun ChatListScreen(
                         .padding(innerPadding)
                 ) {
                     // Connection status indicator
-                    if (uiState.connectionState != null &&
-                        uiState.connectionState.constructor != org.drinkless.tdlib.TdApi.ConnectionStateReady.CONSTRUCTOR
+                    val connectionState = uiState.connectionState
+                    if (connectionState != null &&
+                        connectionState.constructor != org.drinkless.tdlib.TdApi.ConnectionStateReady.CONSTRUCTOR
                     ) {
                         ConnectionStatusBar(statusText = viewModel.getConnectionStatusText())
                     }
@@ -700,6 +701,7 @@ private fun NavigationDrawerContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerItem(
     icon: String,
