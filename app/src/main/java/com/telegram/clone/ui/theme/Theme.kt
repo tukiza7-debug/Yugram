@@ -13,6 +13,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -20,72 +21,72 @@ import androidx.core.view.WindowCompat
 import com.telegram.clone.core.settings.AppSettingsManager
 
 /**
- * Telegram-inspired Material 3 theme configuration.
- * Provides both light and dark color schemes matching Telegram's iconic palette.
+ * Nova — Material 3 theme for Yugram.
+ * Dark-first glassmorphism scheme with the soft purple-to-cyan brand identity.
  */
 
 private val LightColorScheme = lightColorScheme(
-    primary = TelegramBlue,
-    onPrimary = androidx.compose.ui.graphics.Color.White,
-    primaryContainer = TelegramBlueLight,
-    onPrimaryContainer = androidx.compose.ui.graphics.Color.Black,
-    secondary = TelegramBlueDark,
-    onSecondary = androidx.compose.ui.graphics.Color.White,
-    secondaryContainer = TelegramBlueLight,
-    onSecondaryContainer = androidx.compose.ui.graphics.Color.Black,
-    tertiary = StatusOnline,
-    onTertiary = androidx.compose.ui.graphics.Color.White,
-    tertiaryContainer = StatusOnline.copy(alpha = 0.2f),
-    onTertiaryContainer = androidx.compose.ui.graphics.Color.Black,
+    primary = NovaPurple,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE4DFFF),
+    onPrimaryContainer = Color(0xFF241A5E),
+    secondary = NovaCyan,
+    onSecondary = Color(0xFF00202A),
+    secondaryContainer = Color(0xFFCFF3FF),
+    onSecondaryContainer = Color(0xFF00323E),
+    tertiary = NovaGreen,
+    onTertiary = Color(0xFF00301F),
+    tertiaryContainer = NovaGreen.copy(alpha = 0.2f),
+    onTertiaryContainer = Color(0xFF00291A),
     error = StatusError,
-    onError = androidx.compose.ui.graphics.Color.White,
+    onError = Color.White,
     errorContainer = StatusError.copy(alpha = 0.2f),
-    onErrorContainer = StatusError,
+    onErrorContainer = Color(0xFF410009),
     background = BackgroundLight,
     onBackground = TextPrimaryLight,
     surface = SurfaceLight,
     onSurface = TextPrimaryLight,
-    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFE8EAED),
+    surfaceVariant = Color(0xFFE8E8F0),
     onSurfaceVariant = TextSecondaryLight,
     outline = DividerLight,
     outlineVariant = DividerLight.copy(alpha = 0.5f),
-    scrim = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.3f),
-    inverseSurface = androidx.compose.ui.graphics.Color(0xFF2B2B2B),
-    inverseOnSurface = androidx.compose.ui.graphics.Color.White,
-    inversePrimary = TelegramBlueLight,
-    surfaceTint = TelegramBlue
+    scrim = Color.Black.copy(alpha = 0.3f),
+    inverseSurface = Color(0xFF2B2B33),
+    inverseOnSurface = Color.White,
+    inversePrimary = NovaPurple,
+    surfaceTint = NovaPurple
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = TelegramBlue,
-    onPrimary = androidx.compose.ui.graphics.Color.White,
-    primaryContainer = TelegramBlueDark,
-    onPrimaryContainer = androidx.compose.ui.graphics.Color.White,
-    secondary = TelegramBlueLight,
-    onSecondary = androidx.compose.ui.graphics.Color.White,
-    secondaryContainer = TelegramBlueDark,
-    onSecondaryContainer = androidx.compose.ui.graphics.Color.White,
-    tertiary = StatusOnline,
-    onTertiary = androidx.compose.ui.graphics.Color.White,
-    tertiaryContainer = StatusOnline.copy(alpha = 0.2f),
-    onTertiaryContainer = androidx.compose.ui.graphics.Color.White,
+    primary = NovaPurple,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF3D2F86),
+    onPrimaryContainer = Color(0xFFE4DFFF),
+    secondary = NovaCyan,
+    onSecondary = Color(0xFF00202A),
+    secondaryContainer = Color(0xFF00485A),
+    onSecondaryContainer = Color(0xFFCFF3FF),
+    tertiary = NovaGreen,
+    onTertiary = Color(0xFF00291A),
+    tertiaryContainer = NovaGreen.copy(alpha = 0.18f),
+    onTertiaryContainer = Color(0xFFA6F5D8),
     error = StatusError,
-    onError = androidx.compose.ui.graphics.Color.White,
+    onError = Color.White,
     errorContainer = StatusError.copy(alpha = 0.2f),
-    onErrorContainer = StatusError,
-    background = BackgroundDark,
+    onErrorContainer = Color(0xFFFFD9DD),
+    background = NovaBackground,
     onBackground = TextPrimaryDark,
-    surface = SurfaceDark,
+    surface = NovaSurface,
     onSurface = TextPrimaryDark,
-    surfaceVariant = androidx.compose.ui.graphics.Color(0xFF2B3A4A),
+    surfaceVariant = Color(0xFF23232E),
     onSurfaceVariant = TextSecondaryDark,
     outline = DividerDark,
     outlineVariant = DividerDark.copy(alpha = 0.5f),
-    scrim = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f),
-    inverseSurface = androidx.compose.ui.graphics.Color(0xFFE8EAED),
-    inverseOnSurface = androidx.compose.ui.graphics.Color.Black,
-    inversePrimary = TelegramBlueDark,
-    surfaceTint = TelegramBlue
+    scrim = Color.Black.copy(alpha = 0.6f),
+    inverseSurface = Color(0xFFE8E8F0),
+    inverseOnSurface = Color.Black,
+    inversePrimary = NovaPurple,
+    surfaceTint = NovaPurple
 )
 
 @Composable
@@ -118,8 +119,8 @@ fun TelegramCloneTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = if (resolvedDarkTheme) BackgroundDark.toArgb() else TelegramBlue.toArgb()
-            window.navigationBarColor = if (resolvedDarkTheme) BackgroundDark.toArgb() else BackgroundLight.toArgb()
+            window.statusBarColor = if (resolvedDarkTheme) NovaBackground.toArgb() else NovaPurple.toArgb()
+            window.navigationBarColor = if (resolvedDarkTheme) NovaBackground.toArgb() else BackgroundLight.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !resolvedDarkTheme
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !resolvedDarkTheme
         }

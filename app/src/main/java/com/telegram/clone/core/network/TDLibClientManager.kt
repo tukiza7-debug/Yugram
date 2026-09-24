@@ -1009,6 +1009,103 @@ class TDLibClientManager private constructor() {
         return Client.execute(function)
     }
 
+    // ============================================================
+    // Profile Editing (Edit Profile feature)
+    // ============================================================
+
+    /** Updates the current user's first and last name (TdApi.SetName). */
+    fun setProfileName(firstName: String, lastName: String, callback: (TdApi.Object) -> Unit = {}) {
+        tdClient?.send(
+            TdApi.SetName(firstName, lastName),
+            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
+        ) ?: Log.e(TAG, "Cannot set profile name: tdClient is null")
+    }
+
+    /** Updates the current user's bio (TdApi.SetBio). */
+    fun setProfileBio(bio: String, callback: (TdApi.Object) -> Unit = {}) {
+        tdClient?.send(
+            TdApi.SetBio(bio),
+            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
+        ) ?: Log.e(TAG, "Cannot set bio: tdClient is null")
+    }
+
+    /** Updates the current user's username (TdApi.SetUsername). */
+    fun setProfileUsername(username: String, callback: (TdApi.Object) -> Unit = {}) {
+        tdClient?.send(
+            TdApi.SetUsername(username),
+            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
+        ) ?: Log.e(TAG, "Cannot set username: tdClient is null")
+    }
+
+    /**
+     * Sets a new profile photo from a local file path
+     * (TdApi.SetProfilePhoto with InputChatPhotoStatic).
+     */
+    fun setProfilePhoto(filePath: String, callback: (TdApi.Object) -> Unit = {}) {
+        val staticPhoto = TdApi.InputChatPhotoStatic(TdApi.InputFileLocal(filePath))
+        tdClient?.send(
+            TdApi.SetProfilePhoto(staticPhoto, true),
+            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
+        ) ?: Log.e(TAG, "Cannot set profile photo: tdClient is null")
+    }
+
+    /** Deletes a profile photo by id (TdApi.DeleteProfilePhoto). */
+    fun deleteProfilePhoto(profilePhotoId: Long, callback: (TdApi.Object) -> Unit = {}) {
+        tdClient?.send(
+            TdApi.DeleteProfilePhoto(profilePhotoId),
+            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
+        ) ?: Log.e(TAG, "Cannot delete profile photo: tdClient is null")
+    }
+
+    /** Gets full user info including bio (TdApi.GetUserFullInfo). */
+    fun getUserFullInfo(userId: Long, callback: (TdApi.Object) -> Unit) {
+        tdClient?.send(
+            TdApi.GetUserFullInfo(userId),
+            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
+        ) ?: Log.e(TAG, "Cannot get user full info: tdClient is null")
+    }
+
+    // ============================================================
+    // Reactions & Scheduling (Yugram premium-style features)
+    // ============================================================
+
+    /**
+     * Sets (or toggles off when [emoji] is null) a single emoji reaction
+     * on a message via TdApi.SetMessageReactions.
+     */
+    fun setMessageReaction(
+        chatId: Long,
+        messageId: Long,
+        emoji: String?,
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        val reactionTypes: Array<TdApi.ReactionType> = if (emoji == null) {
+            emptyArray()
+        } else {
+            arrayOf(TdApi.ReactionTypeEmoji(emoji))
+        }
+        tdClient?.send(
+            TdApi.SetMessageReactions(chatId, messageId, reactionTypes, false),
+            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
+        ) ?: Log.e(TAG, "Cannot set message reaction: tdClient is null")
+    }
+
+    /**
+     * Sends a text message with custom [TdApi.MessageSendOptions] — used for
+     * scheduled sending via [TdApi.MessageSchedulingStateSendAtDate].
+     */
+    fun sendMessageWithOptions(
+        chatId: Long,
+        options: TdApi.MessageSendOptions,
+        inputMessageContent: TdApi.InputMessageContent,
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        tdClient?.send(
+            TdApi.SendMessage(chatId, null, null, options, null, inputMessageContent),
+            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
+        ) ?: Log.e(TAG, "Cannot send message with options: tdClient is null")
+    }
+
     /**
      * Sends an arbitrary TDLib function asynchronously.
      *

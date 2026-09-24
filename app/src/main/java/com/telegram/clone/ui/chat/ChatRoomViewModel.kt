@@ -3,17 +3,17 @@ package com.telegram.clone.ui.chat
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.telegram.clone.core.settings.AppSettingsManager
 import com.telegram.clone.data.model.MessageItem
 import com.telegram.clone.data.model.UserProfile
 import com.telegram.clone.data.model.UserStatus
 import com.telegram.clone.data.repository.TelegramRepository
 import com.telegram.clone.R
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 import java.text.SimpleDateFormat
@@ -24,12 +24,23 @@ import java.util.Locale
 /**
  * ViewModel for the chat room screen.
  * Manages message loading, sending, and real-time updates for a specific chat.
+ *
+ * Double-sent fix notes:
+ * - Message list is RELOADED with full-replace semantics (no merge-keep-old),
+ *   so a pending message entry can never linger next to its confirmed copy.
+ * - All reload triggers funnel through a single debounced [reloadTrigger]
+ *   flow, so stacked/duplicate triggers collapse into one refresh.
+ * - [initialize] is idempotent per chat — collectors can never stack.
+ * - [sendMessage] has a short send-debounce guard against double taps.
  */
 class ChatRoomViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = TelegramRepository.getInstance()
+    private val settings = AppSettingsManager.getInstance(application)
 
     private var currentChatId: Long = 0
+    private var initializedForChat: Long = 0
+    private var lastSendAtMs: Long = 0
 
     data class ChatRoomUiState(
         val chatId: Long = 0,
@@ -38,7 +49,6 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         val messages: List<MessageItem> = emptyList(),
         val isLoading: Boolean = true,
         val isLoadingMore: Boolean = false,
-        val inputText: String = "",
         val userProfile: UserProfile? = null,
         val errorMessage: String? = null,
         val memberCount: Int = 0,
@@ -52,10 +62,19 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
     val inputText: StateFlow<String> = _inputText.asStateFlow()
 
     /**
+     * Single funnel for every "messages changed" event (new message, send
+     * succeeded/failed, read-outbox, manual refresh). A debounced consumer
+     * performs exactly one reload per burst of events.
+     */
+    private val reloadTrigger = MutableSharedFlow<Long>(extraBufferCapacity = 64)
+
+    /**
      * Initializes the ViewModel for a specific chat.
-     * Must be called before any other operations.
+     * Idempotent: calling it again for the same chat is a no-op.
      */
     fun initialize(chatId: Long) {
+        if (initializedForChat == chatId && chatId != 0L) return
+        initializedForChat = chatId
         currentChatId = chatId
         repository.openChat(chatId)
 
@@ -85,21 +104,31 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         // Load initial messages
         loadMessages()
 
+        // Debounced single-consumer reload loop
+        viewModelScope.launch {
+            reloadTrigger
+                .throttleFirst()
+                .collectLatest { chatIdFilter ->
+                    if (chatIdFilter == currentChatId || chatIdFilter == 0L) {
+                        loadMessages(fromMessageId = 0, limit = 50, isSilent = true)
+                    }
+                }
+        }
+
         // Observe new messages for this chat
         viewModelScope.launch {
             repository.newMessageFlow.collect { update ->
                 if (update.message.chatId == chatId) {
-                    loadMessages(fromMessageId = 0, limit = 10)
+                    reloadTrigger.tryEmit(chatId)
                 }
             }
         }
 
         // Observe message status updates (send succeeded / failed / read-outbox)
-        // so delivery ticks refresh in real time.
         viewModelScope.launch {
             repository.messageUpdateFlow.collect { updatedChatId ->
                 if (updatedChatId == chatId) {
-                    loadMessages(fromMessageId = 0, limit = 50)
+                    reloadTrigger.tryEmit(chatId)
                 }
             }
         }
@@ -120,15 +149,37 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
     }
 
     /**
+     * Drops rapid duplicate emissions, keeping the first of each burst.
+     */
+    private fun kotlinx.coroutines.flow.Flow<Long>.throttleFirst(): kotlinx.coroutines.flow.Flow<Long> {
+        var lastEmit = 0L
+        return kotlinx.coroutines.flow.flow {
+            collect { value ->
+                val now = System.currentTimeMillis()
+                if (now - lastEmit > 150) {
+                    lastEmit = now
+                    emit(value)
+                }
+            }
+        }
+    }
+
+    /**
      * Loads messages for the current chat.
+     *
+     * @param fromMessageId 0 to (re)load the newest page — the visible list is
+     *                       fully REPLACED by the fresh fetch; non-zero to merge
+     *                       an older page (pagination) into the existing list.
+     * @param isSilent true for background refreshes (does not flip isLoading).
      */
     fun loadMessages(
         fromMessageId: Long = 0,
-        limit: Int = 50
+        limit: Int = 50,
+        isSilent: Boolean = false
     ) {
         val state = _uiState.value
         if (fromMessageId == 0L) {
-            _uiState.value = state.copy(isLoading = true)
+            if (!isSilent) _uiState.value = state.copy(isLoading = true)
         } else {
             _uiState.value = state.copy(isLoadingMore = true)
         }
@@ -139,27 +190,33 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
             limit = limit
         ) { messages ->
             viewModelScope.launch {
-                val currentState = _uiState.value
-                val existingIds = currentState.messages.map { it.messageId }.toSet()
-                val newMessages = messages.filter { it.messageId !in existingIds }
-                val allMessages = (currentState.messages + newMessages)
-                    .distinctBy { it.messageId }
-                    .sortedByDescending { it.messageId }
-
-                _uiState.value = currentState.copy(
-                    messages = allMessages,
-                    isLoading = false,
-                    isLoadingMore = false
-                )
+                val current = _uiState.value
+                _uiState.value = if (fromMessageId == 0L) {
+                    // FULL REPLACE — eliminates every stale/duplicate entry.
+                    current.copy(
+                        messages = messages.distinctBy { it.messageId }
+                            .sortedByDescending { it.messageId },
+                        isLoading = false,
+                        isLoadingMore = false
+                    )
+                } else {
+                    // Pagination: merge older messages in, keep freshest version.
+                    val merged = (current.messages + messages)
+                        .distinctBy { it.messageId }
+                        .sortedByDescending { it.messageId }
+                    current.copy(messages = merged, isLoadingMore = false)
+                }
             }
         }
     }
 
     /**
-     * Loads older messages (pagination).
+     * Loads older messages (pagination), guarded against concurrent repeats.
      */
     fun loadOlderMessages() {
-        val oldestMessageId = _uiState.value.messages.lastOrNull()?.messageId ?: 0
+        val state = _uiState.value
+        if (state.isLoadingMore) return
+        val oldestMessageId = state.messages.lastOrNull()?.messageId ?: 0
         if (oldestMessageId > 0) {
             loadMessages(fromMessageId = oldestMessageId, limit = 50)
         }
@@ -178,19 +235,23 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
 
     /**
      * Sends the current input text as a message.
+     * Debounced so a double-tap / IME echo cannot send twice.
      */
     fun sendMessage() {
         val text = _inputText.value.trim()
         if (text.isBlank()) return
 
-        val messageToSend = text
+        val now = System.currentTimeMillis()
+        if (now - lastSendAtMs < 400) return
+        lastSendAtMs = now
+
         _inputText.value = ""
 
         repository.sendCancelTypingAction(currentChatId)
 
         repository.sendTextMessage(
             chatId = currentChatId,
-            text = messageToSend
+            text = text
         ) { result ->
             viewModelScope.launch {
                 if (result.constructor == TdApi.Error.CONSTRUCTOR) {
@@ -201,13 +262,46 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                 }
             }
         }
+    }
 
-        // Refresh messages after a short delay to show the sent message
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(200)
-            loadMessages(fromMessageId = 0, limit = 10)
+    /**
+     * Schedules the current input text to be sent at [epochSeconds]
+     * (server-side scheduling via TdApi.MessageSchedulingStateSendAtDate).
+     */
+    fun sendScheduledMessage(text: String, epochSeconds: Int) {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
+        _inputText.value = ""
+        repository.sendScheduledTextMessage(
+            chatId = currentChatId,
+            text = trimmed,
+            sendAtEpochSeconds = epochSeconds
+        ) { result ->
+            viewModelScope.launch {
+                if (result.constructor == TdApi.Error.CONSTRUCTOR) {
+                    val error = result as TdApi.Error
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Failed to schedule: ${error.message}"
+                    )
+                } else {
+                    reloadTrigger.tryEmit(currentChatId)
+                }
+            }
         }
     }
+
+    /**
+     * Toggles an emoji reaction on a message (double-tap heart etc.).
+     */
+    fun toggleReaction(messageId: Long, emoji: String) {
+        repository.toggleMessageReaction(currentChatId, messageId, emoji)
+    }
+
+    /** Whether the double-tap heart reaction feature is enabled. */
+    fun settingsDoubleTapEnabled(): Boolean = settings.doubleTapReaction.value
+
+    /** Whether Stealth Mode (no read receipts) is enabled. */
+    fun settingsStealthEnabled(): Boolean = settings.stealthMode.value
 
     /**
      * Retries sending a failed message by resending it via TDLib.
@@ -216,7 +310,7 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         repository.resendMessage(currentChatId, messageId) { success ->
             viewModelScope.launch {
                 if (success) {
-                    loadMessages(fromMessageId = 0, limit = 50)
+                    reloadTrigger.tryEmit(currentChatId)
                 } else {
                     _uiState.value = _uiState.value.copy(
                         errorMessage = "Failed to retry message"
@@ -228,8 +322,10 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
 
     /**
      * Marks all messages as read when the user views them.
+     * Skipped entirely when Stealth Mode is enabled.
      */
     fun markMessagesAsRead(messageIds: LongArray) {
+        if (settings.stealthMode.value) return
         if (messageIds.isNotEmpty()) {
             repository.viewMessages(currentChatId, messageIds)
         }
@@ -285,8 +381,6 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         if (timestamp == 0) return "recently"
 
         val lastSeenTime = Date(timestamp * 1000L)
-        val now = Calendar.getInstance()
-        val lastSeenCal = Calendar.getInstance().apply { time = lastSeenTime }
 
         val today = Calendar.getInstance()
         today.set(Calendar.HOUR_OF_DAY, 0)
@@ -330,8 +424,6 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         if (timestamp == 0) return ""
 
         val messageDate = Date(timestamp * 1000L)
-        val now = Calendar.getInstance()
-        val msgCal = Calendar.getInstance().apply { time = messageDate }
 
         val today = Calendar.getInstance()
         today.set(Calendar.HOUR_OF_DAY, 0)

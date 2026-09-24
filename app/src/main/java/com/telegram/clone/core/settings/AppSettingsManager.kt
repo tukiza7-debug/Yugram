@@ -41,6 +41,17 @@ class AppSettingsManager private constructor(context: Context) {
 
         private const val KEY_LANGUAGE = "language"
 
+        // ============================================================
+        // Yugram premium-style (free) features
+        // ============================================================
+        private const val KEY_STEALTH_MODE = "premium_stealth_mode"
+        private const val KEY_DOUBLE_TAP_REACTION = "premium_double_tap_reaction"
+        private const val KEY_PREMIUM_BADGE = "premium_badge"
+
+        // App Lock (PIN)
+        private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
+        private const val KEY_APP_LOCK_PIN_HASH = "app_lock_pin_hash"
+
         @Volatile
         private var INSTANCE: AppSettingsManager? = null
 
@@ -166,6 +177,67 @@ class AppSettingsManager private constructor(context: Context) {
     val language: StateFlow<String> = _language.asStateFlow()
 
     fun setLanguage(lang: String) { prefs.edit().putString(KEY_LANGUAGE, lang).apply(); _language.value = lang }
+
+    // ============================================================
+    // Yugram premium-style (free) features
+    // ============================================================
+
+    /**
+     * Stealth Mode: when enabled, opening chats does NOT mark messages as
+     * read on the server (read receipts are skipped).
+     */
+    private val _stealthMode = MutableStateFlow(prefs.getBoolean(KEY_STEALTH_MODE, false))
+    val stealthMode: StateFlow<Boolean> = _stealthMode.asStateFlow()
+
+    fun setStealthMode(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_STEALTH_MODE, enabled).apply(); _stealthMode.value = enabled
+    }
+
+    /** Double-tap a message bubble to send a heart reaction. */
+    private val _doubleTapReaction = MutableStateFlow(prefs.getBoolean(KEY_DOUBLE_TAP_REACTION, true))
+    val doubleTapReaction: StateFlow<Boolean> = _doubleTapReaction.asStateFlow()
+
+    fun setDoubleTapReaction(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DOUBLE_TAP_REACTION, enabled).apply(); _doubleTapReaction.value = enabled
+    }
+
+    /** Cosmetic "Yugram Premium" star badge next to the user name. */
+    private val _premiumBadge = MutableStateFlow(prefs.getBoolean(KEY_PREMIUM_BADGE, true))
+    val premiumBadge: StateFlow<Boolean> = _premiumBadge.asStateFlow()
+
+    fun setPremiumBadge(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PREMIUM_BADGE, enabled).apply(); _premiumBadge.value = enabled
+    }
+
+    // ============================================================
+    // App Lock (PIN)
+    // ============================================================
+
+    private val _appLockEnabled = MutableStateFlow(prefs.getBoolean(KEY_APP_LOCK_ENABLED, false))
+    val appLockEnabled: StateFlow<Boolean> = _appLockEnabled.asStateFlow()
+
+    val appLockPinHash: String
+        get() = prefs.getString(KEY_APP_LOCK_PIN_HASH, null) ?: ""
+
+    fun setAppLock(enabled: Boolean, pin: String?) {
+        prefs.edit()
+            .putBoolean(KEY_APP_LOCK_ENABLED, enabled)
+            .putString(KEY_APP_LOCK_PIN_HASH, if (enabled && !pin.isNullOrBlank()) sha256(pin) else null)
+            .apply()
+        _appLockEnabled.value = enabled
+    }
+
+    /** Returns true when the given PIN matches the stored hash. */
+    fun verifyAppLockPin(pin: String): Boolean {
+        val stored = appLockPinHash
+        return stored.isNotEmpty() && stored == sha256(pin)
+    }
+
+    private fun sha256(value: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
 
     // ============================================================
     // Helpers

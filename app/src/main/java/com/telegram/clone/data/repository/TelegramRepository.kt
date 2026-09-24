@@ -1044,6 +1044,130 @@ class TelegramRepository private constructor() {
         }
     }
 
+    // ============================================================
+    // Profile Editing (Edit Profile feature)
+    // ============================================================
+
+    /** Updates the current user's name. Calls [onResult] with true on success. */
+    fun setProfileName(firstName: String, lastName: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        tdLibClient.setProfileName(firstName, lastName) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Ok.CONSTRUCTOR) {
+                    // Refresh cached self user so the UI reflects the change.
+                    tdLibClient.currentUser.value?.id?.let { selfId ->
+                        userCache.remove(selfId)
+                        getUser(selfId)
+                    }
+                    onResult(true, null)
+                } else {
+                    val err = result as? TdApi.Error
+                    onResult(false, err?.message ?: "Unknown error")
+                }
+            }
+        }
+    }
+
+    /** Updates the current user's bio. */
+    fun setProfileBio(bio: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        tdLibClient.setProfileBio(bio) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Ok.CONSTRUCTOR) onResult(true, null)
+                else onResult(false, (result as? TdApi.Error)?.message ?: "Unknown error")
+            }
+        }
+    }
+
+    /** Updates the current user's username. */
+    fun setProfileUsername(username: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        tdLibClient.setProfileUsername(username) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Ok.CONSTRUCTOR) {
+                    tdLibClient.currentUser.value?.id?.let { selfId ->
+                        userCache.remove(selfId)
+                        getUser(selfId)
+                    }
+                    onResult(true, null)
+                } else {
+                    onResult(false, (result as? TdApi.Error)?.message ?: "Unknown error")
+                }
+            }
+        }
+    }
+
+    /**
+     * Sets the profile photo from a local image file. Copies the picked URI
+     * content into cache before calling TDLib — done by the caller.
+     */
+    fun setProfilePhoto(filePath: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        tdLibClient.setProfilePhoto(filePath) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Ok.CONSTRUCTOR) {
+                    tdLibClient.currentUser.value?.id?.let { selfId ->
+                        userCache.remove(selfId)
+                        getUser(selfId)
+                    }
+                    onResult(true, null)
+                } else {
+                    onResult(false, (result as? TdApi.Error)?.message ?: "Unknown error")
+                }
+            }
+        }
+    }
+
+    /** Fetches the bio (about) text of the given user. */
+    suspend fun getUserBio(userId: Long): String {
+        if (!tdLibClient.isInitialized()) return ""
+        val deferred = CompletableDeferred<String>()
+        tdLibClient.getUserFullInfo(userId) { obj ->
+            coroutineScope.launch {
+                deferred.complete(
+                    if (obj.constructor == TdApi.UserFullInfo.CONSTRUCTOR) {
+                        (obj as TdApi.UserFullInfo).bio?.text ?: ""
+                    } else ""
+                )
+            }
+        }
+        return withTimeoutOrNull(TDLIB_CALL_TIMEOUT_MS) { deferred.await() } ?: ""
+    }
+
+    // ============================================================
+    // Reactions & Scheduled Messages (Yugram premium-style, free)
+    // ============================================================
+
+    /**
+     * Toggles an emoji reaction on a message. Pass a null emoji to remove.
+     */
+    fun toggleMessageReaction(chatId: Long, messageId: Long, emoji: String?, onResult: (Boolean) -> Unit = {}) {
+        tdLibClient.setMessageReaction(chatId, messageId, emoji) { result ->
+            coroutineScope.launch {
+                onResult(result.constructor == TdApi.Ok.CONSTRUCTOR)
+            }
+        }
+    }
+
+    /**
+     * Schedules a text message to be sent at [sendAtEpochSeconds] (server-side
+     * via TdApi.MessageSchedulingStateSendAtDate).
+     */
+    fun sendScheduledTextMessage(
+        chatId: Long,
+        text: String,
+        sendAtEpochSeconds: Int,
+        onResult: (TdApi.Object) -> Unit = {}
+    ) {
+        val options = TdApi.MessageSendOptions()
+        options.schedulingState = TdApi.MessageSchedulingStateSendAtDate(sendAtEpochSeconds)
+        val inputText = TdApi.InputMessageText(
+            TdApi.FormattedText(text, emptyArray()),
+            null,
+            false
+        )
+        tdLibClient.sendMessageWithOptions(chatId, options, inputText) { result ->
+            coroutineScope.launch { onResult(result) }
+        }
+    }
+
+
     /**
      * Clears the history of a chat (deletes all messages).
      */

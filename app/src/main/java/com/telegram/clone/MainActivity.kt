@@ -8,44 +8,43 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.Contacts
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.telegram.clone.core.config.TelegramConfig
+import com.telegram.clone.core.settings.AppSettingsManager
 import com.telegram.clone.data.repository.TelegramRepository
 import com.telegram.clone.ui.auth.LoginScreen
 import com.telegram.clone.ui.calls.CallScreen
 import com.telegram.clone.ui.calls.CallsScreen
 import com.telegram.clone.ui.chat.ChatRoomScreen
+import com.telegram.clone.ui.components.NovaBottomBar
+import com.telegram.clone.ui.components.NovaTab
 import com.telegram.clone.ui.contacts.ContactsScreen
 import com.telegram.clone.ui.groups.NewGroupScreen
 import com.telegram.clone.ui.home.ChatListScreen
 import com.telegram.clone.ui.newchat.NewChatScreen
+import com.telegram.clone.ui.premium.PremiumScreen
+import com.telegram.clone.ui.premium.AppLockScreen
+import com.telegram.clone.ui.profile.EditProfileScreen
 import com.telegram.clone.ui.profile.ProfileScreen
 import com.telegram.clone.ui.settings.AboutScreen
 import com.telegram.clone.ui.settings.AppearanceSettingsScreen
@@ -56,21 +55,20 @@ import com.telegram.clone.ui.settings.NotificationsSettingsScreen
 import com.telegram.clone.ui.settings.PrivacySettingsScreen
 import com.telegram.clone.ui.settings.SettingsScreen
 import com.telegram.clone.ui.theme.TelegramCloneTheme
-import kotlinx.coroutines.flow.collectLatest
 import org.drinkless.tdlib.TdApi
 
 /**
  * Main host activity that initializes the TDLibClientManager and hosts
- * the Jetpack Compose navigation graph.
+ * the Jetpack Compose navigation graph with the Nova floating glass
+ * bottom bar.
  *
  * Navigation flow:
  * - If not authenticated: Show LoginScreen
- * - If authenticated: Show ChatListScreen with a bottom navigation bar
+ * - If authenticated: Show ChatListScreen with the floating bottom navigation
  * - When a chat is selected: Navigate to ChatRoomScreen
  *
- * The bottom navigation bar (Chats, Contacts, Calls, Settings) is shown
- * only on the four top-level destinations and hidden on detail screens
- * (chat room, call, settings sub-pages, etc.).
+ * The bottom bar is shown only on the three top-level destinations
+ * (Chats, Calls, Settings) and hidden on detail screens.
  */
 class MainActivity : ComponentActivity() {
 
@@ -79,11 +77,14 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TelegramCloneTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    TelegramCloneApp()
+                NovaAppLockGate {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(WindowInsets(0, 0, 0, 0))
+                    ) {
+                        TelegramCloneApp()
+                    }
                 }
             }
         }
@@ -91,16 +92,42 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
+ * App Lock gate — when a PIN lock is enabled in settings, the whole app is
+ * covered by [AppLockScreen] until the correct PIN is entered. The lock
+ * re-engages whenever the activity pauses/stops (user leaves the app).
+ */
+@Composable
+private fun NovaAppLockGate(content: @Composable () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val settings = remember { AppSettingsManager.getInstance(context) }
+    val lockEnabled by settings.appLockEnabled.collectAsStateWithLifecycle()
+    var unlocked by rememberSaveable { mutableStateOf(!lockEnabled) }
+
+    // Re-lock when the activity loses foreground (ON_PAUSE / ON_STOP).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, lockEnabled) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (lockEnabled && event == Lifecycle.Event.ON_PAUSE) {
+                unlocked = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    if (lockEnabled && !unlocked) {
+        AppLockScreen(
+            verifyPin = { pin -> settings.verifyAppLockPin(pin) },
+            onUnlocked = { unlocked = true }
+        )
+    } else {
+        content()
+    }
+}
+
+/**
  * Root composable that manages navigation between screens based on
  * the authentication state from TDLib.
- *
- * A [Scaffold] hosts the [NavHost] in its content and a [MainBottomBar]
- * as its `bottomBar`. The `bottomBar` is only rendered on the four
- * top-level routes so that detail screens (ChatRoom, Call, etc.) are
- * full-screen. The Scaffold's `contentWindowInsets` are zeroed out so
- * that each inner screen's own Scaffold is responsible for system-bar
- * insets (edge-to-edge) — the outer Scaffold only reserves space for
- * the bottom bar via [innerPadding].
  */
 @Composable
 fun TelegramCloneApp() {
@@ -123,7 +150,14 @@ fun TelegramCloneApp() {
     val chats by repository.chatList.collectAsStateWithLifecycle()
     val totalUnread = chats.sumOf { it.unreadCount }.coerceAtMost(99)
 
-    // The bottom bar appears only on the four top-level destinations.
+    val currentTab = when (currentRoute) {
+        Screen.ChatList.route -> NovaTab.CHATS
+        Screen.Calls.route -> NovaTab.CALLS
+        Screen.Settings.route -> NovaTab.SETTINGS
+        else -> null
+    }
+
+    // The bottom bar appears only on the top-level destinations.
     // For Contacts we also hide it when opened in "pick" mode (secret
     // chat selection flow), since that is a modal flow, not a tab.
     val showBottomBar = when (currentRoute) {
@@ -133,37 +167,11 @@ fun TelegramCloneApp() {
         else -> false
     }
 
-    Scaffold(
-        bottomBar = {
-            if (showBottomBar) {
-                MainBottomBar(
-                    currentRoute = currentRoute,
-                    totalUnread = totalUnread,
-                    onTabSelected = { tab ->
-                        val route = when (tab) {
-                            BottomTab.Chats -> Screen.ChatList.route
-                            BottomTab.Contacts -> Screen.Contacts.createRoute()
-                            BottomTab.Calls -> Screen.Calls.route
-                            BottomTab.Settings -> Screen.Settings.route
-                        }
-                        navController.navigate(route) {
-                            // Pop up to the start destination so the back
-                            // stack stays flat, saving state of the other
-                            // tabs so switching is instant and stateful.
-                            popUpTo(Screen.ChatList.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                )
-            }
-        },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.fillMaxSize(),
             enterTransition = {
                 slideInHorizontally(animationSpec = tween(300)) { it / 3 } +
                     fadeIn(animationSpec = tween(300))
@@ -258,12 +266,28 @@ fun TelegramCloneApp() {
                     onDevicesClick = { navController.navigate(Screen.Devices.route) },
                     onDataStorageClick = { navController.navigate(Screen.DataStorage.route) },
                     onLanguageClick = { navController.navigate(Screen.Language.route) },
+                    onPremiumClick = { navController.navigate(Screen.Premium.route) },
                     onAboutClick = { navController.navigate(Screen.About.route) }
                 )
             }
 
             composable(Screen.Profile.route) {
                 ProfileScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onEditProfileClick = {
+                        navController.navigate(Screen.EditProfile.route)
+                    }
+                )
+            }
+
+            composable(Screen.EditProfile.route) {
+                EditProfileScreen(
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Premium.route) {
+                PremiumScreen(
                     onBackClick = { navController.popBackStack() }
                 )
             }
@@ -366,6 +390,33 @@ fun TelegramCloneApp() {
                 AboutScreen(onBackClick = { navController.popBackStack() })
             }
         }
+
+        // Floating glass bottom bar — overlays the content so lists scroll
+        // beneath it for the premium "detached" look.
+        if (showBottomBar) {
+            NovaBottomBar(
+                currentTab = currentTab,
+                unreadCount = totalUnread,
+                onTabSelected = { tab ->
+                    val route = when (tab) {
+                        NovaTab.CHATS -> Screen.ChatList.route
+                        NovaTab.CALLS -> Screen.Calls.route
+                        NovaTab.SETTINGS -> Screen.Settings.route
+                    }
+                    navController.navigate(route) {
+                        // Pop up to the start destination so the back
+                        // stack stays flat, saving state of the other
+                        // tabs so switching is instant and stateful.
+                        popUpTo(Screen.ChatList.route) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomCenter)
+                    .navigationBarsPadding()
+            )
+        }
     }
 
     // Listen for auth state changes and navigate accordingly
@@ -387,93 +438,6 @@ fun TelegramCloneApp() {
                 }
             }
         }
-    }
-}
-
-/**
- * The four top-level tabs shown in the bottom navigation bar.
- */
-private enum class BottomTab {
-    Chats,
-    Contacts,
-    Calls,
-    Settings
-}
-
-/**
- * Material 3 bottom navigation bar with four tabs.
- *
- * The Chats tab carries a [Badge] showing the total number of unread
- * messages across all chats (capped at 99+). Tab selection is driven by
- * [currentRoute] so the active indicator follows navigation state.
- *
- * @param currentRoute The current NavHost destination route, used to
- *                     mark the active tab.
- * @param totalUnread  Total unread message count for the Chats badge.
- * @param onTabSelected Callback invoked when a tab is tapped.
- */
-@Composable
-private fun MainBottomBar(
-    currentRoute: String?,
-    totalUnread: Int,
-    onTabSelected: (BottomTab) -> Unit
-) {
-    NavigationBar {
-        NavigationBarItem(
-            selected = currentRoute == Screen.ChatList.route,
-            onClick = { onTabSelected(BottomTab.Chats) },
-            icon = {
-                BadgedBox(
-                    badge = {
-                        if (totalUnread > 0) {
-                            Badge { Text(text = if (totalUnread > 99) "99+" else totalUnread.toString()) }
-                        }
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Chat,
-                        contentDescription = "Chats"
-                    )
-                }
-            },
-            label = { Text("Chats") }
-        )
-
-        NavigationBarItem(
-            selected = currentRoute == Screen.Contacts.route,
-            onClick = { onTabSelected(BottomTab.Contacts) },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Contacts,
-                    contentDescription = "Contacts"
-                )
-            },
-            label = { Text("Contacts") }
-        )
-
-        NavigationBarItem(
-            selected = currentRoute == Screen.Calls.route,
-            onClick = { onTabSelected(BottomTab.Calls) },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Phone,
-                    contentDescription = "Calls"
-                )
-            },
-            label = { Text("Calls") }
-        )
-
-        NavigationBarItem(
-            selected = currentRoute == Screen.Settings.route,
-            onClick = { onTabSelected(BottomTab.Settings) },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings"
-                )
-            },
-            label = { Text("Settings") }
-        )
     }
 }
 
@@ -522,6 +486,10 @@ sealed class Screen(val route: String) {
     }
 
     object Profile : Screen("profile")
+
+    object EditProfile : Screen("edit_profile")
+
+    object Premium : Screen("premium")
 
     object Settings : Screen("settings")
 

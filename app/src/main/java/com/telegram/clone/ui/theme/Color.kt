@@ -3,75 +3,111 @@ package com.telegram.clone.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Telegram iconic color palette for Jetpack Compose.
- * Matches the official Telegram app's color scheme.
+ * Nova — premium dark glassmorphism palette for Yugram.
+ * Soft purple-to-cyan gradient identity on an elegant near-black canvas.
  */
 
-// Telegram Brand Colors
-val TelegramBlue = Color(0xFF2AABEE)
-val TelegramBlueDark = Color(0xFF229ED9)
-val TelegramBlueLight = Color(0xFF54B8F0)
-val TelegramAccent = Color(0xFF2AABEE)
+// ============================================================
+// Nova brand gradient
+// ============================================================
+val NovaPurple = Color(0xFF7B61FF)
+val NovaCyan = Color(0xFF00D4FF)
+val NovaGradientStart = NovaPurple
+val NovaGradientEnd = NovaCyan
 
-// Chat Bubble Colors
-val ChatBubbleOutgoingLight = Color(0xFFEFFADE)
-val ChatBubbleOutgoingDark = Color(0xFF1B2A1B)
+// Backwards-compatible aliases (existing screens keep compiling and
+// automatically adopt the Nova purple identity).
+val TelegramBlue = NovaPurple
+val TelegramBlueDark = Color(0xFF6249E8)
+val TelegramBlueLight = Color(0xFF9B8CFF)
+val TelegramAccent = NovaPurple
+
+// ============================================================
+// Nova dark canvas
+// ============================================================
+val NovaBackground = Color(0xFF0F0F13)
+val NovaSurface = Color(0xFF17171F)
+val NovaSurfaceHigh = Color(0xFF1F1F29)
+
+// Backwards-compatible background aliases
+val BackgroundLight = Color(0xFFF7F7FA)
+val BackgroundDark = NovaBackground
+val SurfaceLight = Color(0xFFF2F2F6)
+val SurfaceDark = NovaSurface
+
+// ============================================================
+// Glass system
+// ============================================================
+val GlassFill = Color.White.copy(alpha = 0.06f)
+val GlassFillStrong = Color.White.copy(alpha = 0.10f)
+val GlassBorder = Color.White.copy(alpha = 0.14f)
+val GlassBorderSoft = Color.White.copy(alpha = 0.08f)
+
+// ============================================================
+// Text
+// ============================================================
+val TextPrimaryDark = Color(0xFFF5F5FA)
+val TextSecondaryDark = Color(0xFF9A9AAE)
+val TextHintDark = Color(0xFF6D6D80)
+val TextPrimaryLight = Color(0xFF16161D)
+val TextSecondaryLight = Color(0xFF6E6E80)
+val TextHintLight = Color(0xFF9A9AA6)
+
+// ============================================================
+// Accents
+// ============================================================
+val NovaPinkRed = Color(0xFFFF5E7A)      // unread badge glow
+val NovaGreen = Color(0xFF34E0A1)        // online / success
+val NovaOrange = Color(0xFFFFB454)
+val NovaPink = Color(0xFFFF6EC7)
+val NovaBlue = Color(0xFF4DA3FF)
+
+val StatusOnline = NovaGreen
+val StatusOffline = Color(0xFF7A7A8C)
+val StatusError = Color(0xFFFF4D67)
+val StatusWarning = NovaOrange
+
+// Backwards-compatible unread badge aliases
+val UnreadBadge = NovaPinkRed
+val UnreadBadgeMuted = Color(0xFF6E6E80)
+val UnreadBadgeText = Color.White
+
+// ============================================================
+// Chat bubbles (Nova dark)
+// ============================================================
+val ChatBubbleOutgoingDark = Color(0xFF3D2F86)   // deep violet outgoing
+val ChatBubbleOutgoingLight = Color(0xFFE4DFFF)
+val ChatBubbleIncomingDark = Color(0xFF1F1F29)   // glass charcoal incoming
 val ChatBubbleIncomingLight = Color(0xFFFFFFFF)
-val ChatBubbleIncomingDark = Color(0xFF1E2429)
 
-// Background Colors
-val BackgroundLight = Color(0xFFFFFFFF)
-val BackgroundDark = Color(0xFF17212B)
-val SurfaceLight = Color(0xFFF4F4F5)
-val SurfaceDark = Color(0xFF202B36)
+// Backwards-compatible chat background / input aliases
+val ChatBackgroundLight = Color(0xFFE9E9F0)
+val ChatBackgroundDark = Color(0xFF0B0B0F)
+val InputFieldBackgroundLight = Color(0xFFF0F0F5)
+val InputFieldBackgroundDark = Color(0xFF23232E)
 
-// Text Colors
-val TextPrimaryLight = Color(0xFF000000)
-val TextPrimaryDark = Color(0xFFFFFFFF)
-val TextSecondaryLight = Color(0xFF707579)
-val TextSecondaryDark = Color(0xFF8A9AA8)
-val TextHintLight = Color(0xFF9AA0A6)
-val TextHintDark = Color(0xFF6E7B88)
+// ============================================================
+// Delivery status
+// ============================================================
+val DeliveryStatusRead = NovaCyan
+val DeliveryStatusSent = Color(0xFF8E8EA3)
 
-// Divider Colors
-val DividerLight = Color(0xFFE5E7EB)
-val DividerDark = Color(0xFF2B3A4A)
+// ============================================================
+// Divider / misc
+// ============================================================
+val DividerLight = Color(0xFFE4E4EC)
+val DividerDark = Color(0xFF2A2A36)
+val SelectionLight = Color(0xFFE7E1FF)
+val SelectionDark = Color(0xFF3D2F86)
 
-// Status Colors
-val StatusOnline = Color(0xFF4CAF50)
-val StatusOffline = Color(0xFF9E9E9E)
-val StatusError = Color(0xFFF44336)
-val StatusWarning = Color(0xFFFF9800)
-
-// Unread Badge
-val UnreadBadge = Color(0xFF2AABEE)
-val UnreadBadgeMuted = Color(0xFFB8B8B8)
-val UnreadBadgeText = Color(0xFFFFFFFF)
-
-// Selection Colors
-val SelectionLight = Color(0xFFE3F2FD)
-val SelectionDark = Color(0xFF1E3A5F)
-
-// Avatar Placeholder Colors
+// Avatar placeholder palette — tuned to sit well on the dark canvas
 val AvatarColors = listOf(
-    Color(0xFFFF6B6B),
-    Color(0xFF4ECDC4),
-    Color(0xFF45B7D1),
-    Color(0xFF96CEB4),
-    Color(0xFFFFEAA7),
-    Color(0xFFDDA0DD),
-    Color(0xFF98D8C8),
-    Color(0xFFF7DC6F)
+    NovaPurple,
+    NovaCyan,
+    NovaPink,
+    NovaGreen,
+    NovaOrange,
+    NovaBlue,
+    Color(0xFFB085FF),
+    Color(0xFF5EEAD4)
 )
-
-// Chat Background Pattern Color
-val ChatBackgroundLight = Color(0xFFE7EBEF)
-val ChatBackgroundDark = Color(0xFF0E1621)
-
-// Input Field Colors
-val InputFieldBackgroundLight = Color(0xFFF0F2F5)
-val InputFieldBackgroundDark = Color(0xFF242F3D)
-
-// Delivery Status Colors
-val DeliveryStatusRead = Color(0xFF2AABEE)
-val DeliveryStatusSent = Color(0xFF8A9AA8)

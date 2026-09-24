@@ -75,3 +75,91 @@ Yang diubah:
 - Build: ./gradlew assembleDebug
   (atau assembleRelease jika ada signing config)
 ==================================================================
+
+==================================================================
+ YUGRAM — NOVA RELEASE (glassmorphism redesign + fix + premium)
+==================================================================
+
+---------------------------------------------------------------
+A. FIX: EDIT PROFILE (ikon pensil di Profile)
+---------------------------------------------------------------
+Penyebab: MainActivity memanggil ProfileScreen TANPA parameter
+`onEditProfileClick`, jadi ikon pensil memakai default `{}` (kosong),
+dan layar Edit Profile sendiri BELUM ADA di project.
+
+Yang baru:
+- EditProfileScreen (BARU): ubah nama depan/belakang (SetName),
+  bio (SetBio), username (SetUsername), dan foto profil
+  (SetProfilePhoto + InputChatPhotoStatic, via photo picker).
+- Route baru "edit_profile" di MainActivity; ikon pensil, baris
+  info (telepon/username/bio), dan tombol CTA semuanya membuka
+  layar edit.
+- Bio asli diambil via GetUserFullInfo (sebelumnya selalu kosong).
+
+---------------------------------------------------------------
+B. FIX: PESAN TERKIRIM DOBEL ("double sent")
+---------------------------------------------------------------
+Penyebab gabungan di ChatRoomViewModel:
+1. loadMessages() lama hanya MENGGABUNGkan pesan baru (merge
+   keep-old). Saat TDLib mengganti id pesan pending (temporary) ke
+   id final, entri lama tetap tinggal -> teks yang sama tampil dua
+   kali sebagai dua gelembung.
+2. Tiga pemicu reload berbeda (UpdateNewMessage, delay 200ms
+   artifisial, messageUpdateFlow) menembak sendiri-sendiri.
+3. initialize() bisa dipanggil ulang sehingga collector menumpuk.
+
+Solusi:
+- Reload halaman terbaru sekarang FULL REPLACE (bukan merge),
+  duplikasi mustahil; merge hanya untuk pagination (pesan lama).
+- Semua pemicu masuk ke satu reloadTrigger yang di-throttle 150ms
+  (satu refresh per burst event); delay 200ms dihapus.
+- initialize() idempoten per chat; sendMessage() diberi debounce
+  400ms anti double-tap.
+- Auto-scroll kini berdasarkan id pesan TERBARU (bukan size), jadi
+  tidak menghentak saat memuat pesan lama.
+
+---------------------------------------------------------------
+C. REDESIGN UI TOTAL: NOVA GLASSMORPHISM (dark premium)
+---------------------------------------------------------------
+- Palet baru: gradien ungu->cyan (#7B61FF -> #00D4FF), kanvas
+  gelap elegan #0F0F13; semua warna Telegram blue lama di-alias
+  ke identitas Nova sehingga seluruh layar ikut berganti rapi.
+- Chat List: header gradien dengan wordmark "Yugram" ber-glow,
+  search + more (hamburger/drawer DIHAPUS sesuai brief), search
+  pill kaca terapung, kartu chat kaca dengan aksen ungu menyala
+  untuk unread, badge merah-pink ber-glow, FAB gradien besar.
+- Bottom navigation TERAPUNG: pill kaca blur lembut dengan glow
+  ungu pada tab aktif (Chats / Calls / Settings), overlay di atas
+  konten, sembunyi di layar detail.
+- Settings: header gradien, kartu profil kaca besar (avatar
+  berbingkai gradien), menu dalam kartu kaca ber-ikon warna-warni
+  (purple, cyan, pink, green, orange, blue).
+- Chat Room: gelembung outgoing ungu dalam, topbar & tombol kirim
+  gradien Nova; Calls ikut gaya header gradien.
+- Komponen kaca reusable di ui/components/GlassComponents.kt
+  (glassSurface, NovaGradientHeader, GlassSearchBar, NovaBottomBar,
+  NovaFab, GlassCard).
+
+---------------------------------------------------------------
+D. YUGRAM PREMIUM — PERCUMA SELAMANYA (layar baru "premium")
+---------------------------------------------------------------
+Semua fitur premium-style berikut GRATIS, tanpa langganan:
+1. App Lock (PIN 4-6 digit, SHA-256, re-lock saat app keluar
+   foreground) — layar kunci kaca dengan keypad.
+2. Stealth Mode — buka chat TANPA mengirim read receipt
+   (ViewMessages dilewati selama aktif).
+3. Double-tap heart — ketuk dua kali gelembung pesan untuk reaksi
+   hati (SetMessageReactions, server-side, gratis).
+4. Premium star badge — bintang emas di samping nama (Settings &
+   Profile).
+5. Fancy text generator — 7 gaya unicode (bold/italic/script/mono/
+   double/small-caps/wide) yang TIDAK ADA di Telegram resmi;
+   ketuk untuk salin.
+6. Scheduled sending — tekan-lama tombol kirim di chat untuk
+   menjadwalkan 1/8/24 jam (MessageSchedulingStateSendAtDate,
+   server-side).
+
+Catatan jujur: fitur premium Telegram yang ditegakkan di SERVER
+(unlock emoji premium, upload 4GB, badge server, dll.) tidak bisa
+dibuka dari sisi klien — yang kami berikan adalah fitur premium-
+style yang benar-benar berfungsi dan bonus unik di atas itu.

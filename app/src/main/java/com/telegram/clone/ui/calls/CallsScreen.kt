@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -50,7 +51,7 @@ import com.telegram.clone.data.model.ChatType
 import com.telegram.clone.data.repository.TelegramRepository
 import com.telegram.clone.ui.theme.StatusError
 import com.telegram.clone.ui.theme.StatusOnline
-import com.telegram.clone.ui.theme.TelegramBlue
+import com.telegram.clone.ui.theme.NovaPurple
 import com.telegram.clone.ui.theme.TelegramCloneTheme
 import com.telegram.clone.ui.theme.TelegramTextStyles
 import kotlinx.coroutines.launch
@@ -73,16 +74,34 @@ fun CallsScreen(
     TelegramCloneTheme {
         Scaffold(
             contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-            topBar = {
-                TopAppBar(
-                    title = { Text("Calls", color = Color.White, fontWeight = FontWeight.Medium) },
-                    navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) } },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = TelegramBlue, titleContentColor = Color.White)
-                )
-            },
             containerColor = MaterialTheme.colorScheme.background
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                // Nova gradient header (tab screen — no back arrow)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                listOf(
+                                    com.telegram.clone.ui.theme.NovaGradientStart,
+                                    com.telegram.clone.ui.theme.NovaGradientEnd
+                                )
+                            ),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                                bottomStart = 28.dp, bottomEnd = 28.dp
+                            )
+                        )
+                        .statusBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                ) {
+                    Text(
+                        text = "Calls",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp
+                    )
+                }
                 if (chats.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -138,7 +157,7 @@ private fun CallLogItem(
         }
         // Call button
         IconButton(onClick = onCallClick) {
-            Icon(Icons.Default.Call, "Call", tint = TelegramBlue)
+            Icon(Icons.Default.Call, "Call", tint = NovaPurple)
         }
     }
 }

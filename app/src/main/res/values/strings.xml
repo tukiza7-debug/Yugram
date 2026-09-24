@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Telegram Clone</string>
+    <string name="app_name">Yugram</string>
 
     <!-- Login Screen -->
     <string name="login_title">Telegram</string>
@@ -112,4 +112,52 @@
     <string name="action_saved_messages">Saved Messages</string>
     <string name="action_settings">Settings</string>
     <string name="action_log_out">Log Out</string>
+    <string name="action_new_chat">New chat</string>
+    <string name="action_profile">Profile</string>
+    <string name="action_back">Back</string>
+    <string name="action_next">Next</string>
+    <string name="action_cancel">Cancel</string>
+
+    <!-- Edit Profile -->
+    <string name="edit_profile_title">Edit Profile</string>
+    <string name="edit_profile_change_photo">Change photo</string>
+    <string name="edit_profile_name_section">Name</string>
+    <string name="profile_first_name">First name</string>
+    <string name="profile_last_name">Last name</string>
+    <string name="edit_profile_save_name">Save name</string>
+    <string name="edit_profile_save_username">Save username</string>
+    <string name="edit_profile_save_bio">Save bio</string>
+    <string name="edit_profile_name_updated">Name updated</string>
+    <string name="edit_profile_username_updated">Username updated</string>
+    <string name="edit_profile_bio_updated">Bio updated</string>
+    <string name="edit_profile_photo_updated">Profile photo updated</string>
+    <string name="edit_profile_update_failed">Update failed: %1$s</string>
+
+    <!-- Settings -->
+    <string name="settings_premium_subtitle">Yugram Premium — free forever</string>
+
+    <!-- Yugram Premium (free) -->
+    <string name="premium_title">Yugram Premium</string>
+    <string name="premium_hero_title">Premium — FREE forever</string>
+    <string name="premium_hero_subtitle">Every premium-style feature below is unlocked for everyone, at no cost, only in Yugram.</string>
+    <string name="premium_app_lock">App Lock (PIN)</string>
+    <string name="premium_app_lock_desc">Lock the whole app behind a 4–6 digit PIN</string>
+    <string name="premium_app_lock_on">App Lock enabled</string>
+    <string name="premium_app_lock_off">App Lock disabled</string>
+    <string name="premium_stealth">Stealth Mode</string>
+    <string name="premium_stealth_desc">Open chats without sending read receipts</string>
+    <string name="premium_double_tap">Double-tap heart</string>
+    <string name="premium_double_tap_desc">Double-tap any message to react with a heart</string>
+    <string name="premium_badge">Premium star badge</string>
+    <string name="premium_badge_desc">Show a golden star next to your name</string>
+    <string name="premium_schedule">Scheduled sending</string>
+    <string name="premium_schedule_desc">Long-press the send button in any chat to schedule a message</string>
+    <string name="premium_fancy_text">Fancy text generator</string>
+    <string name="premium_fancy_text_desc">Unicode-styled text unavailable in official Telegram — tap a style to copy</string>
+    <string name="premium_fancy_hint">Type something…</string>
+    <string name="premium_copy">Copy</string>
+    <string name="premium_copied">Copied to clipboard</string>
+    <string name="premium_pin_create">Create your PIN</string>
+    <string name="premium_pin_confirm">Confirm your PIN</string>
+    <string name="premium_pin_label">PIN (4–6 digits)</string>
 </resources>

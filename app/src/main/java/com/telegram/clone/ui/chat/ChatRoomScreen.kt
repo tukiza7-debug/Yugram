@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -101,6 +102,9 @@ import com.telegram.clone.ui.theme.TelegramCloneTheme
 import com.telegram.clone.ui.theme.TelegramTextStyles
 import com.telegram.clone.ui.theme.TextSecondaryDark
 import com.telegram.clone.ui.theme.TextSecondaryLight
+import com.telegram.clone.ui.theme.NovaPurple
+import com.telegram.clone.ui.theme.NovaGradientEnd
+import com.telegram.clone.ui.theme.NovaGradientStart
 
 /**
  * Chat room screen featuring:
@@ -126,6 +130,7 @@ fun ChatRoomScreen(
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var showMoreMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
     var recordSeconds by remember { mutableStateOf(0) }
     var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
@@ -195,8 +200,8 @@ fun ChatRoomScreen(
         viewModel.initialize(chatId)
     }
 
-    // Auto-scroll to bottom when new messages arrive
-    LaunchedEffect(uiState.messages.size) {
+    // Auto-scroll to bottom when the newest message changes
+    LaunchedEffect(uiState.messages.firstOrNull()?.messageId) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(0)
         }
@@ -262,7 +267,8 @@ fun ChatRoomScreen(
                             onAttachClick = { filePickerLauncher.launch("*/*") },
                             onVoiceClick = {
                                 recordPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                            }
+                            },
+                            onScheduleClick = { showScheduleDialog = true }
                         )
                     }
                 },
@@ -286,7 +292,12 @@ fun ChatRoomScreen(
                                     messages = uiState.messages,
                                     viewModel = viewModel,
                                     listState = listState,
-                                    onLoadMore = viewModel::loadOlderMessages
+                                    onLoadMore = viewModel::loadOlderMessages,
+                                    onDoubleTapReaction = { messageId ->
+                                        if (viewModel.settingsDoubleTapEnabled()) {
+                                            viewModel.toggleReaction(messageId, "❤️")
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -348,6 +359,18 @@ fun ChatRoomScreen(
                     },
                     dismissButton = {
                         androidx.compose.material3.TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                    }
+                )
+            }
+
+            if (showScheduleDialog) {
+                ScheduleSendDialog(
+                    onDismiss = { showScheduleDialog = false },
+                    onSchedule = { delayMinutes ->
+                        showScheduleDialog = false
+                        val epoch = (System.currentTimeMillis() / 1000L + delayMinutes * 60L).toInt()
+                        viewModel.sendScheduledMessage(inputText, epoch)
+                        keyboardController?.hide()
                     }
                 )
             }
@@ -484,7 +507,8 @@ private fun MessagesList(
     messages: List<MessageItem>,
     viewModel: ChatRoomViewModel,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    onLoadMore: () -> Unit
+    onLoadMore: () -> Unit,
+    onDoubleTapReaction: (Long) -> Unit
 ) {
     val groupedItems = viewModel.groupMessagesByDate(messages)
 
@@ -510,7 +534,8 @@ private fun MessagesList(
                     MessageBubble(
                         message = item,
                         formatTime = viewModel::formatMessageTime,
-                        onRetry = viewModel::retryMessage
+                        onRetry = viewModel::retryMessage,
+                        onDoubleTap = { onDoubleTapReaction(item.messageId) }
                     )
                 }
                 is ChatRoomViewModel.DateSeparator -> {
@@ -551,11 +576,13 @@ private fun DateSeparatorBubble(date: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     message: MessageItem,
     formatTime: (Int) -> String,
-    onRetry: (Long) -> Unit = {}
+    onRetry: (Long) -> Unit = {},
+    onDoubleTap: () -> Unit = {}
 ) {
     val isOutgoing = message.isOutgoing
     val bubbleColor = if (isOutgoing) {
@@ -605,6 +632,7 @@ private fun MessageBubble(
                         Modifier.padding(end = 48.dp)
                     }
                 )
+                .combinedClickable(onClick = {}, onDoubleClick = onDoubleTap)
         ) {
             Column(
                 modifier = Modifier.padding(
@@ -1158,7 +1186,8 @@ private fun MessageInputBar(
     onTextChange: (String) -> Unit,
     onSendClick: () -> Unit,
     onAttachClick: () -> Unit,
-    onVoiceClick: () -> Unit
+    onVoiceClick: () -> Unit,
+    onScheduleClick: () -> Unit = {}
 ) {
     val hasText = text.isNotBlank()
 
@@ -1239,15 +1268,25 @@ private fun MessageInputBar(
                 label = "sendButtonMorph"
             ) { showSend ->
                 if (showSend) {
-                    IconButton(
-                        onClick = onSendClick,
-                        modifier = Modifier.size(40.dp)
+                    // Tap = send now; long-press = schedule (Yugram premium, free)
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .combinedClickable(
+                                onClick = onSendClick,
+                                onLongClick = onScheduleClick
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(TelegramBlue),
+                                .background(
+                                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                        listOf(NovaGradientStart, NovaGradientEnd)
+                                    )
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -1317,6 +1356,40 @@ private fun startVoiceRecording(context: android.content.Context): Pair<MediaRec
     } catch (e: Exception) {
         null
     }
+}
+
+/**
+ * Schedule-send dialog (Yugram premium, free): picks a delay and schedules
+ * the current input text server-side via TDLib.
+ */
+@Composable
+private fun ScheduleSendDialog(
+    onDismiss: () -> Unit,
+    onSchedule: (delayMinutes: Long) -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Schedule message") },
+        text = {
+            Text("The message will be sent automatically at the chosen time.")
+        },
+        confirmButton = {},
+        dismissButton = {
+            androidx.compose.material3.Row(
+                modifier = Modifier.padding(end = 8.dp)
+            ) {
+                androidx.compose.material3.TextButton(onClick = { onSchedule(60L) }) {
+                    Text("1 hour")
+                }
+                androidx.compose.material3.TextButton(onClick = { onSchedule(480L) }) {
+                    Text("8 hours")
+                }
+                androidx.compose.material3.TextButton(onClick = { onSchedule(1440L) }) {
+                    Text("24 hours")
+                }
+            }
+        }
+    )
 }
 
 @Composable
