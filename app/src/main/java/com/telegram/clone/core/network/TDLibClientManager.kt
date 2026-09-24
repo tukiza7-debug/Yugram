@@ -854,7 +854,11 @@ class TDLibClientManager private constructor() {
         val settings = TdApi.ChatNotificationSettings()
         settings.useDefaultMuteFor = (muteFor == 0)
         settings.muteFor = muteFor
-        settings.sound = "default"
+        settings.useDefaultSound = true
+        settings.soundId = 0
+        settings.useDefaultMuteStories = true
+        settings.useDefaultStorySound = true
+        settings.useDefaultShowStoryPoster = true
         settings.showPreview = true
         settings.disablePinnedMessageNotifications = false
         settings.disableMentionNotifications = false

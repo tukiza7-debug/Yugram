@@ -174,7 +174,7 @@ private fun SessionRow(
     session: TdApi.Session,
     onTerminate: () -> Unit
 ) {
-    val location = listOf(session.country, session.region).filter { it.isNotBlank() }.joinToString(" ").ifBlank { session.ip }
+    val location = session.location.ifBlank { session.ipAddress }
     val platformLine = listOf(session.platform, session.systemVersion, session.applicationName).filter { it.isNotBlank() }.joinToString(" · ")
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onTerminate).padding(horizontal = 16.dp, vertical = 12.dp),
