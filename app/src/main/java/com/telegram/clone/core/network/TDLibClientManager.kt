@@ -919,8 +919,15 @@ class TDLibClientManager private constructor() {
         messageIds: LongArray,
         callback: (TdApi.Object) -> Unit = {}
     ) {
+        // Use the no-arg constructor + field assignment to avoid
+        // version-specific constructor signature issues (this TDLib
+        // build's ResendMessages ctor takes 4 args: chatId, messageIds,
+        // InputTextQuote, messageThreadId).
+        val resend = TdApi.ResendMessages()
+        resend.chatId = chatId
+        resend.messageIds = messageIds
         tdClient?.send(
-            TdApi.ResendMessages(chatId, messageIds),
+            resend,
             Client.ResultHandler { result ->
                 coroutineScope.launch { callback(result) }
             }

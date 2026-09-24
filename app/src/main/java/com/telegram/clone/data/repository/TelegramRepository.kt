@@ -17,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -202,13 +203,13 @@ class TelegramRepository private constructor() {
             }
             TdApi.UpdateMessageSendSucceeded.CONSTRUCTOR -> {
                 val sendUpdate = update as TdApi.UpdateMessageSendSucceeded
-                refreshMessageInCache(sendUpdate.chatId, sendUpdate.oldMessageId, sendUpdate.message)
-                _messageUpdateFlow.emit(sendUpdate.chatId)
+                refreshMessageInCache(sendUpdate.message.chatId, sendUpdate.oldMessageId, sendUpdate.message)
+                _messageUpdateFlow.emit(sendUpdate.message.chatId)
             }
             TdApi.UpdateMessageSendFailed.CONSTRUCTOR -> {
                 val failUpdate = update as TdApi.UpdateMessageSendFailed
-                refreshMessageInCache(failUpdate.chatId, failUpdate.messageId, null)
-                _messageUpdateFlow.emit(failUpdate.chatId)
+                refreshMessageInCache(failUpdate.message.chatId, failUpdate.oldMessageId, null)
+                _messageUpdateFlow.emit(failUpdate.message.chatId)
             }
             TdApi.UpdateChatReadOutbox.CONSTRUCTOR -> {
                 val readUpdate = update as TdApi.UpdateChatReadOutbox
