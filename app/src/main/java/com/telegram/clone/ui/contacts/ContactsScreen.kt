@@ -102,6 +102,7 @@ fun ContactsScreen(
 
     TelegramCloneTheme {
         Scaffold(
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
             topBar = {
                 TopAppBar(
                     title = { Text(stringResource(R.string.new_chat_contacts), color = Color.White, fontWeight = FontWeight.Medium) },

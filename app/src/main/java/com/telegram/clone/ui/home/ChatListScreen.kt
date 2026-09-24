@@ -149,6 +149,7 @@ fun ChatListScreen(
             }
         ) {
             Scaffold(
+                contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                 snackbarHost = {
                     androidx.compose.material3.SnackbarHost(hostState = snackbarHostState)
                 },
