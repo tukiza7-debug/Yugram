@@ -98,6 +98,7 @@ fun TelegramCloneTheme(
     val context = LocalContext.current
     val settingsManager = remember { AppSettingsManager.getInstance(context) }
     val themeMode by settingsManager.themeMode.collectAsState()
+    val dynamicColorEnabled by settingsManager.dynamicColor.collectAsState()
 
     val resolvedDarkTheme = when (themeMode) {
         AppSettingsManager.ThemeMode.LIGHT -> false
@@ -106,7 +107,7 @@ fun TelegramCloneTheme(
     }
 
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        (dynamicColor || dynamicColorEnabled) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (resolvedDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         resolvedDarkTheme -> DarkColorScheme

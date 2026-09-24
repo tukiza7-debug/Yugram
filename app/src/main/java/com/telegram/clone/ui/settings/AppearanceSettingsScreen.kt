@@ -1,5 +1,6 @@
 package com.telegram.clone.ui.settings
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -26,6 +28,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,6 +63,7 @@ fun AppearanceSettingsScreen(onBackClick: () -> Unit) {
     val context = LocalContext.current
     val settingsManager = remember { AppSettingsManager.getInstance(context) }
     val themeMode by settingsManager.themeMode.collectAsState()
+    val dynamicColor by settingsManager.dynamicColor.collectAsState()
 
     TelegramCloneTheme {
         Scaffold(
@@ -112,6 +117,35 @@ fun AppearanceSettingsScreen(onBackClick: () -> Unit) {
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Material You dynamic color — only available on Android 12+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    SettingsSectionTitle("Color")
+                    Surface(color = MaterialTheme.colorScheme.surface) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF000000)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Palette, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Material You", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Use colors from your wallpaper", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = dynamicColor,
+                                onCheckedChange = { settingsManager.setDynamicColor(it) },
+                                colors = SwitchDefaults.colors(checkedTrackColor = TelegramBlue)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
                 Text(
                     text = "Changes apply instantly across the app.",

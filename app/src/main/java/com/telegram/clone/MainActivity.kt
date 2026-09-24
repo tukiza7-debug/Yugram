@@ -3,6 +3,11 @@ package com.telegram.clone
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -157,7 +162,23 @@ fun TelegramCloneApp() {
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = {
+                slideInHorizontally(animationSpec = tween(300)) { it / 3 } +
+                    fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutHorizontally(animationSpec = tween(300)) { -it / 3 } +
+                    fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                slideInHorizontally(animationSpec = tween(300)) { -it / 3 } +
+                    fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutHorizontally(animationSpec = tween(300)) { it / 3 } +
+                    fadeOut(animationSpec = tween(300))
+            }
         ) {
             composable(Screen.Login.route) {
                 LoginScreen(

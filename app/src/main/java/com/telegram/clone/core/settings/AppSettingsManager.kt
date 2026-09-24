@@ -19,6 +19,7 @@ class AppSettingsManager private constructor(context: Context) {
 
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_ACCENT_COLOR = "accent_color"
+        private const val KEY_DYNAMIC_COLOR = "dynamic_color"
 
         private const val KEY_NOTIF_MESSAGES = "notif_messages"
         private const val KEY_NOTIF_GROUPS = "notif_groups"
@@ -67,6 +68,19 @@ class AppSettingsManager private constructor(context: Context) {
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
         _themeMode.value = mode
+    }
+
+    /**
+     * Whether Material You (Android 12+) dynamic color derived from the
+     * device wallpaper should be used instead of the Telegram-branded
+     * palette. Defaults to false to preserve the Telegram blue identity.
+     */
+    private val _dynamicColor = MutableStateFlow(prefs.getBoolean(KEY_DYNAMIC_COLOR, false))
+    val dynamicColor: StateFlow<Boolean> = _dynamicColor.asStateFlow()
+
+    fun setDynamicColor(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DYNAMIC_COLOR, enabled).apply()
+        _dynamicColor.value = enabled
     }
 
     // ============================================================

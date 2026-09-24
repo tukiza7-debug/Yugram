@@ -3,7 +3,14 @@ package com.telegram.clone.ui.chat
 import android.media.MediaRecorder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -1221,37 +1228,47 @@ private fun MessageInputBar(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            // Send / Voice button
-            if (hasText) {
-                IconButton(
-                    onClick = onSendClick,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(TelegramBlue),
-                        contentAlignment = Alignment.Center
+            // Send / Voice button — morphs between mic and send icons
+            AnimatedContent(
+                targetState = hasText,
+                transitionSpec = {
+                    val enter = scaleIn(animationSpec = tween(150)) + fadeIn(animationSpec = tween(150))
+                    val exit = scaleOut(animationSpec = tween(150)) + fadeOut(animationSpec = tween(150))
+                    enter togetherWith exit
+                },
+                label = "sendButtonMorph"
+            ) { showSend ->
+                if (showSend) {
+                    IconButton(
+                        onClick = onSendClick,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(TelegramBlue),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = stringResource(R.string.chat_room_send),
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                } else {
+                    IconButton(
+                        onClick = onVoiceClick,
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = stringResource(R.string.chat_room_send),
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = stringResource(R.string.chat_room_voice),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            } else {
-                IconButton(
-                    onClick = onVoiceClick,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = stringResource(R.string.chat_room_voice),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }
