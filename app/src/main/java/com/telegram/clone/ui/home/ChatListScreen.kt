@@ -1,5 +1,6 @@
 package com.telegram.clone.ui.home
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -69,6 +70,7 @@ import com.telegram.clone.R
 import com.telegram.clone.data.model.ChatItem
 import com.telegram.clone.data.model.ChatType
 import com.telegram.clone.data.model.MessageStatus
+import com.telegram.clone.ui.components.ChatListSkeleton
 import com.telegram.clone.ui.theme.ChatBubbleOutgoingLight
 import com.telegram.clone.ui.theme.StatusOnline
 import com.telegram.clone.ui.theme.TelegramBlue
@@ -306,19 +308,21 @@ fun ChatListScreen(
 
                     // Chat list content
                     Box(modifier = Modifier.fillMaxSize()) {
-                        when {
-                            uiState.isLoading -> {
-                                LoadingState()
-                            }
-                            uiState.chats.isEmpty() -> {
-                                EmptyState()
-                            }
-                            else -> {
-                                ChatListContent(
-                                    chats = uiState.chats,
-                                    onChatClick = onChatClick,
-                                    viewModel = viewModel
-                                )
+                        Crossfade(targetState = uiState.isLoading, label = "chatListLoading") { isLoading ->
+                            when {
+                                isLoading -> {
+                                    ChatListSkeleton()
+                                }
+                                uiState.chats.isEmpty() -> {
+                                    EmptyState()
+                                }
+                                else -> {
+                                    ChatListContent(
+                                        chats = uiState.chats,
+                                        onChatClick = onChatClick,
+                                        viewModel = viewModel
+                                    )
+                                }
                             }
                         }
                     }
@@ -350,29 +354,6 @@ private fun ConnectionStatusBar(statusText: String) {
             Text(
                 text = statusText,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun LoadingState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            CircularProgressIndicator(
-                color = TelegramBlue,
-                strokeWidth = 3.dp
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = stringResource(R.string.loading),
-                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

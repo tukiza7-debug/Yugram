@@ -2,6 +2,7 @@ package com.telegram.clone.ui.contacts
 
 import androidx.compose.ui.res.stringResource
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.telegram.clone.R
 import com.telegram.clone.data.repository.TelegramRepository
+import com.telegram.clone.ui.components.ContactsSkeleton
 import com.telegram.clone.ui.theme.StatusOnline
 import com.telegram.clone.ui.theme.TelegramBlue
 import com.telegram.clone.ui.theme.TelegramCloneTheme
@@ -142,27 +144,27 @@ fun ContactsScreen(
 
                 // Contacts list
                 Box(modifier = Modifier.fillMaxSize()) {
-                    when {
-                        isLoading -> {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = TelegramBlue, strokeWidth = 3.dp)
+                    Crossfade(targetState = isLoading, label = "contactsLoading") { loading ->
+                        when {
+                            loading -> {
+                                ContactsSkeleton()
                             }
-                        }
-                        filteredContacts.isEmpty() -> {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("👤", fontSize = 48.sp)
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(if (searchQuery.isBlank()) "No contacts found" else "No matching contacts", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            filteredContacts.isEmpty() -> {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("👤", fontSize = 48.sp)
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(if (searchQuery.isBlank()) "No contacts found" else "No matching contacts", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                             }
-                        }
-                        else -> {
-                            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                items(filteredContacts, key = { it.id }) { user ->
-                                    ContactItem(user = user) {
-                                        if (onContactPick != null) onContactPick(user.id)
-                                        else navigatingUserId = user.id
+                            else -> {
+                                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                    items(filteredContacts, key = { it.id }) { user ->
+                                        ContactItem(user = user) {
+                                            if (onContactPick != null) onContactPick(user.id)
+                                            else navigatingUserId = user.id
+                                        }
                                     }
                                 }
                             }

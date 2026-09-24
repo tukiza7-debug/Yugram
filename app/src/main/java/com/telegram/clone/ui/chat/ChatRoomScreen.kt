@@ -3,6 +3,7 @@ package com.telegram.clone.ui.chat
 import android.media.MediaRecorder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,6 +83,7 @@ import com.telegram.clone.data.model.MessageContent
 import com.telegram.clone.data.model.MessageItem
 import com.telegram.clone.data.model.MessageStatus
 import com.telegram.clone.data.model.UserStatus
+import com.telegram.clone.ui.components.ChatRoomSkeleton
 import com.telegram.clone.ui.theme.ChatBubbleColors
 import com.telegram.clone.ui.theme.DeliveryStatusRead
 import com.telegram.clone.ui.theme.DeliveryStatusSent
@@ -264,20 +266,22 @@ fun ChatRoomScreen(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    when {
-                        uiState.isLoading && uiState.messages.isEmpty() -> {
-                            LoadingState()
-                        }
-                        uiState.messages.isEmpty() -> {
-                            EmptyChatState()
-                        }
-                        else -> {
-                            MessagesList(
-                                messages = uiState.messages,
-                                viewModel = viewModel,
-                                listState = listState,
-                                onLoadMore = viewModel::loadOlderMessages
-                            )
+                    Crossfade(targetState = uiState.isLoading && uiState.messages.isEmpty(), label = "chatRoomLoading") { loading ->
+                        when {
+                            loading -> {
+                                ChatRoomSkeleton()
+                            }
+                            uiState.messages.isEmpty() -> {
+                                EmptyChatState()
+                            }
+                            else -> {
+                                MessagesList(
+                                    messages = uiState.messages,
+                                    viewModel = viewModel,
+                                    listState = listState,
+                                    onLoadMore = viewModel::loadOlderMessages
+                                )
+                            }
                         }
                     }
                 }
@@ -433,19 +437,6 @@ private fun ChatRoomTopBar(
             titleContentColor = Color.White
         )
     )
-}
-
-@Composable
-private fun LoadingState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        CircularProgressIndicator(
-            color = TelegramBlue,
-            strokeWidth = 3.dp
-        )
-    }
 }
 
 @Composable
