@@ -8,7 +8,7 @@ import com.telegram.clone.data.model.MessageContent
 import com.telegram.clone.data.model.MessageForwardInfo
 import com.telegram.clone.data.model.MessageForwardOrigin
 import com.telegram.clone.data.model.MessageItem
-import com.telegram.clone.data.model.MessageSendingState
+import com.telegram.clone.data.model.MessageStatus
 import com.telegram.clone.data.model.TdLibModelConverter
 import com.telegram.clone.data.model.UserProfile
 import com.telegram.clone.data.model.UserStatus
@@ -68,6 +68,9 @@ class TelegramRepository private constructor() {
     private val messageCacheMutex = Mutex()
     private val messageCache = ConcurrentHashMap<Long, MutableList<MessageItem>>()
 
+    /** Tracks the last read outgoing message id per chat, for Read-vs-Delivered status. */
+    private val lastReadOutboxCache = ConcurrentHashMap<Long, Long>()
+
     // ============================================================
     // State Flows
     // ============================================================
@@ -77,6 +80,14 @@ class TelegramRepository private constructor() {
 
     private val _isLoadingChats = MutableStateFlow(false)
     val isLoadingChats: StateFlow<Boolean> = _isLoadingChats.asStateFlow()
+
+    /**
+     * Emits chat IDs whenever a message status changes (send succeeded, send
+     * failed, or read-outbox updated). ViewModels observe this to refresh the
+     * visible message list so status ticks update in real time.
+     */
+    private val _messageUpdateFlow = MutableSharedFlow<Long>(extraBufferCapacity = 100)
+    val messageUpdateFlow: SharedFlow<Long> = _messageUpdateFlow.asSharedFlow()
 
     /** Authorization state flow (delegated from TDLibClientManager) */
     val authorizationState: StateFlow<TdApi.AuthorizationState?> = tdLibClient.authorizationState
@@ -189,6 +200,26 @@ class TelegramRepository private constructor() {
                 val newMessage = update as TdApi.UpdateNewMessage
                 addMessageToCache(newMessage.message)
             }
+            TdApi.UpdateMessageSendSucceeded.CONSTRUCTOR -> {
+                val sendUpdate = update as TdApi.UpdateMessageSendSucceeded
+                refreshMessageInCache(sendUpdate.chatId, sendUpdate.oldMessageId, sendUpdate.message)
+                _messageUpdateFlow.emit(sendUpdate.chatId)
+            }
+            TdApi.UpdateMessageSendFailed.CONSTRUCTOR -> {
+                val failUpdate = update as TdApi.UpdateMessageSendFailed
+                refreshMessageInCache(failUpdate.chatId, failUpdate.messageId, null)
+                _messageUpdateFlow.emit(failUpdate.chatId)
+            }
+            TdApi.UpdateChatReadOutbox.CONSTRUCTOR -> {
+                val readUpdate = update as TdApi.UpdateChatReadOutbox
+                lastReadOutboxCache[readUpdate.chatId] = readUpdate.lastReadOutboxMessageId
+                chatCache[readUpdate.chatId]?.let { chat ->
+                    chat.lastReadOutboxMessageId = readUpdate.lastReadOutboxMessageId
+                    rebuildChatList()
+                }
+                updateReadStatusesInCache(readUpdate.chatId, readUpdate.lastReadOutboxMessageId)
+                _messageUpdateFlow.emit(readUpdate.chatId)
+            }
         }
     }
 
@@ -290,7 +321,7 @@ class TelegramRepository private constructor() {
             chatType = chatType,
             senderName = senderName,
             isOutgoing = isOutgoing,
-            messageSendingState = chat.lastMessage?.let { convertMessageSendingState(it.sendingState) },
+            messageStatus = chat.lastMessage?.let { convertMessageStatus(it, isOutgoing, chat.lastReadOutboxMessageId) },
             draftMessage = chat.draftMessage?.inputMessageText?.let { (it as? TdApi.InputMessageText)?.text?.text }
         )
     }
@@ -328,10 +359,36 @@ class TelegramRepository private constructor() {
         return Pair(senderName, isOutgoing)
     }
 
-    private fun convertMessageSendingState(state: TdApi.MessageSendingState?): MessageSendingState? {
-        return when (state?.constructor) {
-            TdApi.MessageSendingStatePending.CONSTRUCTOR -> MessageSendingState.PENDING
-            TdApi.MessageSendingStateFailed.CONSTRUCTOR -> MessageSendingState.FAILED
+    /**
+     * Converts a TDLib message's sending state + read-outbox marker into a
+     * 5-state [MessageStatus] sealed-class value.
+     *
+     * - sendingState Pending  → Pending  (clock)
+     * - sendingState Failed   → Failed   (warning)
+     * - sendingState null (sent successfully):
+     *     - outgoing && id <= lastReadOutboxMessageId → Read (blue double-check)
+     *     - outgoing && not read                      → Delivered (gray double-check)
+     *     - incoming                                   → null (no status icon)
+     */
+    private fun convertMessageStatus(
+        message: TdApi.Message,
+        isOutgoing: Boolean,
+        lastReadOutboxMessageId: Long
+    ): MessageStatus? {
+        return when (message.sendingState?.constructor) {
+            TdApi.MessageSendingStatePending.CONSTRUCTOR -> MessageStatus.Pending
+            TdApi.MessageSendingStateFailed.CONSTRUCTOR -> MessageStatus.Failed
+            null -> {
+                if (isOutgoing) {
+                    if (lastReadOutboxMessageId > 0 && message.id <= lastReadOutboxMessageId) {
+                        MessageStatus.Read
+                    } else {
+                        MessageStatus.Delivered
+                    }
+                } else {
+                    null
+                }
+            }
             else -> null
         }
     }
@@ -425,8 +482,10 @@ class TelegramRepository private constructor() {
             )
         }
 
-        val sendingState = convertMessageSendingState(message.sendingState)
-        val isRead = message.sendingState == null && !isOutgoing
+        val lastReadOutbox = lastReadOutboxCache[message.chatId]
+            ?: chatCache[message.chatId]?.lastReadOutboxMessageId
+            ?: 0L
+        val status = convertMessageStatus(message, isOutgoing, lastReadOutbox)
 
         return MessageItem(
             messageId = message.id,
@@ -442,8 +501,7 @@ class TelegramRepository private constructor() {
             isEdited = message.editDate != 0,
             replyToMessageId = (message.replyTo as? TdApi.MessageReplyToMessage)?.messageId ?: 0,
             forwardInfo = forwardInfo,
-            sendingState = sendingState,
-            isRead = isRead,
+            status = status,
             mediaAlbumId = message.mediaAlbumId,
             containsUnreadMention = message.containsUnreadMention,
             avatarPhoto = avatarPhoto
@@ -505,6 +563,80 @@ class TelegramRepository private constructor() {
                     existing.sortByDescending { it.messageId }
                 }
             }
+        }
+    }
+
+    /**
+     * Refreshes a single cached message after a send-succeeded or send-failed
+     * update. For send-succeeded, [newMessage] carries the server-confirmed
+     * message (with the real id); the old local-id entry is replaced. For
+     * send-failed, [newMessage] is null and the existing entry's status is
+     * set to [MessageStatus.Failed].
+     */
+    private fun refreshMessageInCache(chatId: Long, oldMessageId: Long, newMessage: TdApi.Message?) {
+        coroutineScope.launch {
+            if (newMessage != null) {
+                val messageItem = convertMessageToMessageItem(newMessage)
+                messageCacheMutex.withLock {
+                    val existing = messageCache.getOrPut(chatId) { mutableListOf() }
+                    existing.removeAll { it.messageId == oldMessageId || it.messageId == newMessage.id }
+                    existing.add(0, messageItem)
+                    existing.sortByDescending { it.messageId }
+                }
+            } else {
+                messageCacheMutex.withLock {
+                    val existing = messageCache[chatId] ?: return@withLock
+                    val idx = existing.indexOfFirst { it.messageId == oldMessageId }
+                    if (idx >= 0) {
+                        existing[idx] = existing[idx].copy(status = MessageStatus.Failed)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Updates the read status of all outgoing messages in the cache after the
+     * read-outbox marker for a chat advances.
+     */
+    private fun updateReadStatusesInCache(chatId: Long, lastReadOutboxMessageId: Long) {
+        coroutineScope.launch {
+            messageCacheMutex.withLock {
+                val existing = messageCache[chatId] ?: return@withLock
+                for (i in existing.indices) {
+                    val item = existing[i]
+                    if (item.isOutgoing && item.status != null && item.status != MessageStatus.Failed) {
+                        val isRead = lastReadOutboxMessageId > 0 && item.messageId <= lastReadOutboxMessageId
+                        val newStatus = if (isRead) MessageStatus.Read else MessageStatus.Delivered
+                        if (item.status != newStatus) {
+                            existing[i] = item.copy(status = newStatus)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Retries sending a failed message by resending it via TDLib.
+     */
+    fun resendMessage(chatId: Long, messageId: Long, onResult: (Boolean) -> Unit = {}) {
+        tdLibClient.resendMessages(chatId, longArrayOf(messageId)) { result ->
+            coroutineScope.launch {
+                val success = result.constructor == TdApi.Ok.CONSTRUCTOR
+                if (success) {
+                    _messageUpdateFlow.emit(chatId)
+                    loadMessagesForRetry(chatId, messageId)
+                }
+                onResult(success)
+            }
+        }
+    }
+
+    /** Reloads the message list for a chat after a retry so the UI refreshes. */
+    private fun loadMessagesForRetry(chatId: Long, messageId: Long) {
+        getChatMessages(chatId, fromMessageId = 0, limit = 50) { _ ->
+            // Cache is updated inside getChatMessages; UI picks up via messageUpdateFlow
         }
     }
 

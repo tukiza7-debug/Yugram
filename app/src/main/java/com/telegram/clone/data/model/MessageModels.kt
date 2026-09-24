@@ -24,7 +24,7 @@ data class ChatItem(
     val chatType: ChatType,
     val senderName: String?,
     val isOutgoing: Boolean,
-    val messageSendingState: MessageSendingState?,
+    val messageStatus: MessageStatus?,
     val draftMessage: String?
 )
 
@@ -41,12 +41,30 @@ enum class ChatType {
 }
 
 /**
- * State of a message being sent.
+ * Delivery / read status of an outgoing message, represented as a sealed class
+ * with 5 distinct states mirroring Telegram's tick-mark progression.
+ *
+ * Pending  🕐  — message is being sent (clock icon)
+ * Sent     ✓   — message reached the Telegram server (single check)
+ * Delivered ✓✓ — message delivered to the recipient's device (double check, gray)
+ * Read      ✓✓ — message read by the recipient (double check, blue)
+ * Failed    ⚠️  — message could not be sent (warning icon, shows retry button)
  */
-enum class MessageSendingState {
-    PENDING,
-    FAILED,
-    SUCCESS
+sealed class MessageStatus {
+    /** Message is being sent — clock icon. */
+    object Pending : MessageStatus()
+
+    /** Message sent to the server — single check. */
+    object Sent : MessageStatus()
+
+    /** Message delivered to the recipient — double check (gray). */
+    object Delivered : MessageStatus()
+
+    /** Message read by the recipient — double check (blue). */
+    object Read : MessageStatus()
+
+    /** Message failed to send — warning icon, retry available. */
+    object Failed : MessageStatus()
 }
 
 /**
@@ -62,8 +80,7 @@ data class MessageItem(
     val isEdited: Boolean,
     val replyToMessageId: Long,
     val forwardInfo: MessageForwardInfo?,
-    val sendingState: MessageSendingState?,
-    val isRead: Boolean,
+    val status: MessageStatus?,
     val mediaAlbumId: Long,
     val containsUnreadMention: Boolean,
     val avatarPhoto: TdApi.File?

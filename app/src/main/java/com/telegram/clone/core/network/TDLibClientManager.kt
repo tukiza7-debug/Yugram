@@ -908,6 +908,26 @@ class TDLibClientManager private constructor() {
     }
 
     /**
+     * Resends (retries) one or more failed messages.
+     *
+     * @param chatId The chat identifier
+     * @param messageIds The identifiers of messages to resend
+     * @param callback Callback receiving the result or error
+     */
+    fun resendMessages(
+        chatId: Long,
+        messageIds: LongArray,
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        tdClient?.send(
+            TdApi.ResendMessages(chatId, messageIds),
+            Client.ResultHandler { result ->
+                coroutineScope.launch { callback(result) }
+            }
+        ) ?: Log.e(TAG, "Cannot resend messages: tdClient is null")
+    }
+
+    /**
      * Views messages in a chat (marks them as read).
      *
      * @param chatId The chat identifier

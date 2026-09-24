@@ -94,6 +94,16 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
+        // Observe message status updates (send succeeded / failed / read-outbox)
+        // so delivery ticks refresh in real time.
+        viewModelScope.launch {
+            repository.messageUpdateFlow.collect { updatedChatId ->
+                if (updatedChatId == chatId) {
+                    loadMessages(fromMessageId = 0, limit = 50)
+                }
+            }
+        }
+
         // Observe user status changes
         viewModelScope.launch {
             repository.userStatusFlow.collect { update ->
@@ -196,6 +206,23 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             kotlinx.coroutines.delay(200)
             loadMessages(fromMessageId = 0, limit = 10)
+        }
+    }
+
+    /**
+     * Retries sending a failed message by resending it via TDLib.
+     */
+    fun retryMessage(messageId: Long) {
+        repository.resendMessage(currentChatId, messageId) { success ->
+            viewModelScope.launch {
+                if (success) {
+                    loadMessages(fromMessageId = 0, limit = 50)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Failed to retry message"
+                    )
+                }
+            }
         }
     }
 

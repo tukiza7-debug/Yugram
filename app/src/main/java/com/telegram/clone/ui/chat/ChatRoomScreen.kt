@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.KeyboardVoice
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
@@ -78,6 +80,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.telegram.clone.data.model.MessageContent
 import com.telegram.clone.data.model.MessageItem
+import com.telegram.clone.data.model.MessageStatus
 import com.telegram.clone.data.model.UserStatus
 import com.telegram.clone.ui.theme.ChatBubbleColors
 import com.telegram.clone.ui.theme.DeliveryStatusRead
@@ -508,7 +511,8 @@ private fun MessagesList(
                 is MessageItem -> {
                     MessageBubble(
                         message = item,
-                        formatTime = viewModel::formatMessageTime
+                        formatTime = viewModel::formatMessageTime,
+                        onRetry = viewModel::retryMessage
                     )
                 }
                 is ChatRoomViewModel.DateSeparator -> {
@@ -552,7 +556,8 @@ private fun DateSeparatorBubble(date: String) {
 @Composable
 private fun MessageBubble(
     message: MessageItem,
-    formatTime: (Int) -> String
+    formatTime: (Int) -> String,
+    onRetry: (Long) -> Unit = {}
 ) {
     val isOutgoing = message.isOutgoing
     val bubbleColor = if (isOutgoing) {
@@ -707,11 +712,11 @@ private fun MessageBubble(
                         color = ChatBubbleColors.timestampText()
                     )
 
-                    if (isOutgoing) {
+                    if (isOutgoing && message.status != null) {
                         Spacer(modifier = Modifier.width(4.dp))
-                        DeliveryStatusIcon(
-                            isRead = message.isRead,
-                            isFailed = message.sendingState == com.telegram.clone.data.model.MessageSendingState.FAILED
+                        MessageStatusIcon(
+                            status = message.status,
+                            onRetry = { onRetry(message.messageId) }
                         )
                     }
                 }
@@ -720,21 +725,46 @@ private fun MessageBubble(
     }
 }
 
+/**
+ * Renders the 5-state message status icon inside an outgoing bubble:
+ *
+ * - Pending   🕐  → Schedule (clock)
+ * - Sent      ✓   → Check (single tick, gray)
+ * - Delivered ✓✓  → DoneAll (double tick, gray)
+ * - Read      ✓✓  → DoneAll (double tick, blue)
+ * - Failed    ⚠️  → ErrorOutline (tappable, triggers retry)
+ */
 @Composable
-private fun DeliveryStatusIcon(
-    isRead: Boolean,
-    isFailed: Boolean
+private fun MessageStatusIcon(
+    status: MessageStatus,
+    onRetry: () -> Unit
 ) {
-    when {
-        isFailed -> {
+    when (status) {
+        MessageStatus.Pending -> {
             Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Failed",
+                imageVector = Icons.Default.Schedule,
+                contentDescription = "Pending",
                 modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.error
+                tint = ChatBubbleColors.timestampText()
             )
         }
-        isRead -> {
+        MessageStatus.Sent -> {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "Sent",
+                modifier = Modifier.size(14.dp),
+                tint = DeliveryStatusSent
+            )
+        }
+        MessageStatus.Delivered -> {
+            Icon(
+                imageVector = Icons.Default.DoneAll,
+                contentDescription = "Delivered",
+                modifier = Modifier.size(14.dp),
+                tint = DeliveryStatusSent
+            )
+        }
+        MessageStatus.Read -> {
             Icon(
                 imageVector = Icons.Default.DoneAll,
                 contentDescription = "Read",
@@ -742,13 +772,18 @@ private fun DeliveryStatusIcon(
                 tint = DeliveryStatusRead
             )
         }
-        else -> {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Sent",
-                modifier = Modifier.size(14.dp),
-                tint = DeliveryStatusSent
-            )
+        MessageStatus.Failed -> {
+            IconButton(
+                onClick = onRetry,
+                modifier = Modifier.size(20.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ErrorOutline,
+                    contentDescription = "Failed — tap to retry",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
         }
     }
 }

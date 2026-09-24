@@ -22,8 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
@@ -67,7 +68,7 @@ import coil.compose.AsyncImage
 import com.telegram.clone.R
 import com.telegram.clone.data.model.ChatItem
 import com.telegram.clone.data.model.ChatType
-import com.telegram.clone.data.model.MessageSendingState
+import com.telegram.clone.data.model.MessageStatus
 import com.telegram.clone.ui.theme.ChatBubbleOutgoingLight
 import com.telegram.clone.ui.theme.StatusOnline
 import com.telegram.clone.ui.theme.TelegramBlue
@@ -528,7 +529,7 @@ private fun ChatListItem(
                 // Delivery status indicator for outgoing messages
                 if (chat.isOutgoing) {
                     MessageDeliveryIcon(
-                        state = chat.messageSendingState,
+                        status = chat.messageStatus,
                         isRead = chat.unreadCount == 0,
                         modifier = Modifier
                             .size(16.dp)
@@ -619,36 +620,57 @@ private fun getChatInitials(chat: ChatItem): String {
 
 @Composable
 private fun MessageDeliveryIcon(
-    state: MessageSendingState?,
+    status: MessageStatus?,
     isRead: Boolean,
     modifier: Modifier = Modifier
 ) {
-    when (state) {
-        MessageSendingState.PENDING -> {
+    when (status) {
+        MessageStatus.Pending -> {
             // Clock icon - pending
             Text(
-                text = "⏱",
+                text = "🕐",
                 fontSize = 12.sp,
                 modifier = modifier
             )
         }
-        MessageSendingState.FAILED -> {
-            // Red exclamation
+        MessageStatus.Failed -> {
+            // Red warning - failed
             Icon(
-                imageVector = Icons.Default.Check,
+                imageVector = Icons.Default.Error,
                 contentDescription = null,
                 modifier = modifier,
                 tint = MaterialTheme.colorScheme.error
             )
         }
-        else -> {
-            // Double check for sent/read
+        MessageStatus.Read -> {
+            // Double check - read (blue)
             Icon(
-                imageVector = if (isRead) Icons.Default.CheckCircle else Icons.Default.Check,
+                imageVector = Icons.Default.DoneAll,
                 contentDescription = null,
                 modifier = modifier.size(14.dp),
-                tint = if (isRead) TelegramBlue else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = TelegramBlue
             )
+        }
+        MessageStatus.Delivered -> {
+            // Double check - delivered (gray)
+            Icon(
+                imageVector = Icons.Default.DoneAll,
+                contentDescription = null,
+                modifier = modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        MessageStatus.Sent -> {
+            // Single check - sent
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                modifier = modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        null -> {
+            // No status (incoming message) — show nothing
         }
     }
 }
