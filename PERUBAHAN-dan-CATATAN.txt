@@ -1,0 +1,77 @@
+==================================================================
+ YUGRAM — PATCH PERBAIKAN (build untuk deploy Termux)
+==================================================================
+Berdasarkan repo: https://github.com/tukiza7-debug/Yugram (commit b51d2e1)
+
+---------------------------------------------------------------
+1. PERBAIKAN UTAMA: GAMBAR / AVATAR TIDAK MUNCUL
+---------------------------------------------------------------
+Penyebab: TDLib hanya mengisi `File.local.path` SETELAH file di-download.
+Kode lama tidak pernah memanggil downloadFile, dan event `UpdateFile`
+tidak di-handle → path selalu kosong → Coil tidak pernah load gambar.
+
+Yang diubah:
+- TDLibClientManager.kt  : tambah `fileFlow` (SharedFlow<TdApi.File>)
+                           + handler `UpdateFile.CONSTRUCTOR`
+                           + method `downloadFile(fileId, priority)`
+- TelegramRepository.kt  : expose `fileFlow` + `downloadFile()`
+- ui/components/TdImage.kt (BARU): composable yang memicu download
+                           dan reaktif terhadap fileFlow.
+- ChatListScreen.kt      : avatar chat → pakai TdFileImage.
+- ChatRoomScreen.kt      : foto pesan & thumbnail video → TdFileImage.
+
+---------------------------------------------------------------
+2. STUB / TOMBOL MATI YANG DIPERBAIKI (sebelumnya = "coming soon")
+---------------------------------------------------------------
+- NewChatScreen: SEMUA tombol sekarang berfungsi
+    * New Group      → NewGroupScreen (createNewBasicGroupChat)
+    * New Secret Chat→ Contacts (mode pick) → createNewSecretChat
+    * New Channel    → dialog input nama → createNewSupergroupChat(channel)
+    * Contacts       → ContactsScreen
+    * Saved Messages → buka chat diri sendiri (createPrivateChat self)
+- ContactsScreen: tambah mode `onContactPick` (untuk secret chat).
+- MainActivity: route Contacts pakai argumen opsional `?pick={pickMode}`.
+- ChatRoomScreen: menu "Search" (palsu) dihapus → diganti "Delete Chat"
+                 (dengan dialog konfirmasi, memanggil TdApi.DeleteChat).
+- DataStorageSettingsScreen: tambah tombol "Clear Cache" (sebelumnya
+                 hanya tampilkan angka, tidak ada tombol hapus).
+- DevicesScreen: SEBELUMNYA pakai API SALAH `getConnectedWebsites()`
+                 (website login via Telegram Widget) → diganti
+                 `getActiveSessions()` + `terminateSession()` (perangkat
+                 aktif sungguhan). Sekarang menampilkan deviceModel,
+                 platform, IP, lokasi, lastActive — dan bisa di-terminate.
+
+---------------------------------------------------------------
+3. BUG LAIN YANG DIPERBAIKI
+---------------------------------------------------------------
+- setChatNotificationSettings: SEBELUMNYA buat ChatNotificationSettings
+  kosong (semua field default 0/false) lalu set hanya muteFor → merusak
+  SEMUA pengaturan notifikasi chat. Sekarang semua field diset eksplisit
+  (useDefaultMuteFor, sound="default", showPreview=true, dll).
+
+---------------------------------------------------------------
+4. CATATAN / KETERBATASAN YANG MASIH ADA (belum diubah)
+---------------------------------------------------------------
+- Voice message: format rekaman M4A/AAC (bukan OGG/Opus standar voice
+  note Telegram) — mungkin tidak dirender sebagai waveform. Belum ada
+  tombol Cancel (stop = langsung kirim).
+- CallScreen & CallsScreen: masih simulasi UI (tidak ada VoIP sungguhan;
+  butuh libtdjni voip module).
+- PrivacySettings / NotificationsSettings / Language: toggle hanya
+  tersimpan di SharedPreferences lokal (belum memanggil TDLib
+  setUserPrivacySettingRules / setScopeNotificationSettings / ganti
+  locale aplikasi).
+- ProfileScreen: tombol "Edit Profile" belum ada layar edit (tidak
+  crash, hanya belum berfungsi).
+- Search dalam chat: dihapus dari menu (sebelumnya palsu).
+
+---------------------------------------------------------------
+5. CARA BUILD DI TERMUX
+---------------------------------------------------------------
+- Butuh JDK 17 + Android SDK (platform android-36).
+- Set API credentials di gradle.properties:
+    TELEGRAM_API_ID=...
+    TELEGRAM_API_HASH=...
+- Build: ./gradlew assembleDebug
+  (atau assembleRelease jika ada signing config)
+==================================================================

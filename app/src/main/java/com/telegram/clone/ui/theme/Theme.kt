@@ -10,10 +10,14 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.telegram.clone.core.settings.AppSettingsManager
 
 /**
  * Telegram-inspired Material 3 theme configuration.
@@ -91,12 +95,21 @@ fun TelegramCloneTheme(
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val context = LocalContext.current
+    val settingsManager = remember { AppSettingsManager.getInstance(context) }
+    val themeMode by settingsManager.themeMode.collectAsState()
+
+    val resolvedDarkTheme = when (themeMode) {
+        AppSettingsManager.ThemeMode.LIGHT -> false
+        AppSettingsManager.ThemeMode.DARK -> true
+        AppSettingsManager.ThemeMode.SYSTEM -> darkTheme
+    }
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (resolvedDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
+        resolvedDarkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
 
@@ -104,10 +117,10 @@ fun TelegramCloneTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = if (darkTheme) BackgroundDark.toArgb() else TelegramBlue.toArgb()
-            window.navigationBarColor = if (darkTheme) BackgroundDark.toArgb() else BackgroundLight.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
+            window.statusBarColor = if (resolvedDarkTheme) BackgroundDark.toArgb() else TelegramBlue.toArgb()
+            window.navigationBarColor = if (resolvedDarkTheme) BackgroundDark.toArgb() else BackgroundLight.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !resolvedDarkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !resolvedDarkTheme
         }
     }
 
@@ -120,40 +133,54 @@ fun TelegramCloneTheme(
 
 /**
  * Helper composable to get chat bubble colors based on theme and direction.
+ * Reads the user's explicit theme preference (Light/Dark/System) from
+ * [AppSettingsManager] so the appearance setting actually takes effect.
  */
 object ChatBubbleColors {
     @Composable
-    fun outgoing(darkTheme: Boolean = isSystemInDarkTheme()): androidx.compose.ui.graphics.Color {
-        return if (darkTheme) ChatBubbleOutgoingDark else ChatBubbleOutgoingLight
+    private fun isDark(): Boolean {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val settings = remember { AppSettingsManager.getInstance(context) }
+        val mode by settings.themeMode.collectAsState()
+        return when (mode) {
+            AppSettingsManager.ThemeMode.LIGHT -> false
+            AppSettingsManager.ThemeMode.DARK -> true
+            AppSettingsManager.ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        }
     }
 
     @Composable
-    fun incoming(darkTheme: Boolean = isSystemInDarkTheme()): androidx.compose.ui.graphics.Color {
-        return if (darkTheme) ChatBubbleIncomingDark else ChatBubbleIncomingLight
+    fun outgoing(): androidx.compose.ui.graphics.Color {
+        return if (isDark()) ChatBubbleOutgoingDark else ChatBubbleOutgoingLight
     }
 
     @Composable
-    fun outgoingText(darkTheme: Boolean = isSystemInDarkTheme()): androidx.compose.ui.graphics.Color {
-        return if (darkTheme) TextPrimaryDark else TextPrimaryLight
+    fun incoming(): androidx.compose.ui.graphics.Color {
+        return if (isDark()) ChatBubbleIncomingDark else ChatBubbleIncomingLight
     }
 
     @Composable
-    fun incomingText(darkTheme: Boolean = isSystemInDarkTheme()): androidx.compose.ui.graphics.Color {
-        return if (darkTheme) TextPrimaryDark else TextPrimaryLight
+    fun outgoingText(): androidx.compose.ui.graphics.Color {
+        return if (isDark()) TextPrimaryDark else TextPrimaryLight
     }
 
     @Composable
-    fun timestampText(darkTheme: Boolean = isSystemInDarkTheme()): androidx.compose.ui.graphics.Color {
-        return if (darkTheme) TextSecondaryDark else TextSecondaryLight
+    fun incomingText(): androidx.compose.ui.graphics.Color {
+        return if (isDark()) TextPrimaryDark else TextPrimaryLight
     }
 
     @Composable
-    fun chatBackground(darkTheme: Boolean = isSystemInDarkTheme()): androidx.compose.ui.graphics.Color {
-        return if (darkTheme) ChatBackgroundDark else ChatBackgroundLight
+    fun timestampText(): androidx.compose.ui.graphics.Color {
+        return if (isDark()) TextSecondaryDark else TextSecondaryLight
     }
 
     @Composable
-    fun inputFieldBackground(darkTheme: Boolean = isSystemInDarkTheme()): androidx.compose.ui.graphics.Color {
-        return if (darkTheme) InputFieldBackgroundDark else InputFieldBackgroundLight
+    fun chatBackground(): androidx.compose.ui.graphics.Color {
+        return if (isDark()) ChatBackgroundDark else ChatBackgroundLight
+    }
+
+    @Composable
+    fun inputFieldBackground(): androidx.compose.ui.graphics.Color {
+        return if (isDark()) InputFieldBackgroundDark else InputFieldBackgroundLight
     }
 }

@@ -78,6 +78,17 @@ class ChatListViewModel(application: Application) : AndroidViewModel(application
 
     init {
         loadChats()
+
+        // TDLib initializes asynchronously; the initial loadChats() above may be
+        // a no-op if the client isn't ready yet. Retry once authorization reaches
+        // Ready so the chat list actually populates after login.
+        viewModelScope.launch {
+            repository.authorizationState.collect { state ->
+                if (state?.constructor == TdApi.AuthorizationStateReady.CONSTRUCTOR) {
+                    loadChats()
+                }
+            }
+        }
     }
 
     /**

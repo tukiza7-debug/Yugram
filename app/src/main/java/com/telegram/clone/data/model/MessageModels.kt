@@ -388,9 +388,9 @@ object TdLibModelConverter {
                         WebPageInfo(
                             url = linkPreview.url,
                             title = linkPreview.title,
-                            description = linkPreview.description,
+                            description = linkPreview.description?.text,
                             siteName = linkPreview.siteName,
-                            photo = linkPreview.photo
+                            photo = null
                         )
                     }
                 )

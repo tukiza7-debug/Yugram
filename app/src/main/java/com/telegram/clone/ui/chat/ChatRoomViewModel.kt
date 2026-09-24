@@ -7,6 +7,7 @@ import com.telegram.clone.data.model.MessageItem
 import com.telegram.clone.data.model.UserProfile
 import com.telegram.clone.data.model.UserStatus
 import com.telegram.clone.data.repository.TelegramRepository
+import com.telegram.clone.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -217,7 +218,7 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
     /**
      * Cleans up resources when the chat room is closed.
      */
-    fun onCleared() {
+    override fun onCleared() {
         super.onCleared()
         if (currentChatId != 0L) {
             repository.closeChat(currentChatId)

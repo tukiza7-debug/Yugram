@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.os.Build
 import android.util.Log
 import com.telegram.clone.core.network.TDLibClientManager
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,20 +28,31 @@ class TelegramCloneApplication : Application() {
         const val NOTIFICATION_CHANNEL_CALLS = "calls_channel"
     }
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // SupervisorJob keeps siblings alive when one child fails; the handler logs
+    // uncaught throwables (including Errors like UnsatisfiedLinkError) so a
+    // native-library load failure is reported instead of silently crashing.
+    private val applicationScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, throwable ->
+            Log.e(TAG, "Uncaught coroutine exception", throwable)
+        }
+    )
 
     override fun onCreate() {
         super.onCreate()
 
         Log.i(TAG, "Application onCreate - initializing TDLib client")
 
-        // Initialize TDLib client manager
+        // Initialize TDLib client manager.
+        // catch(Throwable) is intentional: native-library load failures surface as
+        // UnsatisfiedLinkError / NoClassDefFoundError (subclasses of Error, not
+        // Exception). Catching Throwable keeps the process alive (the UI will show
+        // the login screen / config banner) instead of hard-crashing.
         applicationScope.launch {
             try {
                 TDLibClientManager.getInstance().initialize(this@TelegramCloneApplication)
                 Log.i(TAG, "TDLib client manager initialized successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize TDLib client manager", e)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to initialize TDLib client manager", t)
             }
         }
 

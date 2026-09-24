@@ -49,7 +49,7 @@
         android:usesCleartextTraffic="false"
         android:largeHeap="true"
         android:hardwareAccelerated="true"
-        tools:targetApi="34">
+        tools:targetApi="36">
 
         <activity
             android:name=".MainActivity"

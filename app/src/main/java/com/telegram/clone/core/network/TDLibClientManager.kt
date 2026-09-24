@@ -118,6 +118,10 @@ class TDLibClientManager private constructor() {
     private val _errorFlow = MutableSharedFlow<TdApi.Error>(extraBufferCapacity = 50)
     val errorFlow: SharedFlow<TdApi.Error> = _errorFlow
 
+    /** File download progress/completion events (emits the updated TdApi.File) */
+    private val _fileFlow = MutableSharedFlow<TdApi.File>(extraBufferCapacity = 200)
+    val fileFlow: SharedFlow<TdApi.File> = _fileFlow
+
     // ============================================================
     // TDLib Result Handler
     // ============================================================
@@ -182,7 +186,7 @@ class TDLibClientManager private constructor() {
      * Closes the TDLib client and releases all resources.
      */
     suspend fun close() = clientMutex.withLock {
-        tdClient?.close()
+        tdClient?.send(TdApi.Close(), resultHandler)
         tdClient = null
         pendingRequests.clear()
         _authorizationState.value = null
@@ -247,6 +251,10 @@ class TDLibClientManager private constructor() {
                     val update = `object` as TdApi.UpdateConnectionState
                     _connectionState.value = update.state
                 }
+                TdApi.UpdateFile.CONSTRUCTOR -> {
+                    val file = (`object` as TdApi.UpdateFile).file
+                    _fileFlow.emit(file)
+                }
                 else -> {
                     Log.v(TAG, "Unhandled update type: ${`object`.javaClass.simpleName}")
                 }
@@ -273,11 +281,8 @@ class TDLibClientManager private constructor() {
                 sendTdlibParameters()
             }
 
-            // State 2: TDLib needs encryption key to open the database
-            TdApi.AuthorizationStateWaitEncryptionKey.CONSTRUCTOR -> {
-                Log.i(TAG, "State: WaitEncryptionKey - sending default encryption key")
-                sendEncryptionKey()
-            }
+            // State 2: (removed) AuthorizationStateWaitEncryptionKey was removed in TDLib 1.8.x;
+            // the database encryption key is now provided via SetTdlibParameters.databaseEncryptionKey.
 
             // State 3: TDLib needs phone number from user
             TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR -> {
@@ -342,9 +347,10 @@ class TDLibClientManager private constructor() {
             Log.e(TAG, "Failed to create TDLib directories", e)
         }
 
-        val parameters = TdApi.TdlibParameters().apply {
+        val parameters = TdApi.SetTdlibParameters().apply {
             databaseDirectory = databaseDir
             filesDirectory = filesDir
+            databaseEncryptionKey = ByteArray(0)
             useMessageDatabase = TelegramConfig.USE_MESSAGE_DATABASE
             useSecretChats = TelegramConfig.USE_SECRET_CHATS
             useFileDatabase = TelegramConfig.USE_FILE_DATABASE
@@ -355,27 +361,12 @@ class TDLibClientManager private constructor() {
             deviceModel = TelegramConfig.getDeviceModel()
             systemVersion = TelegramConfig.getSystemVersion()
             applicationVersion = TelegramConfig.APPLICATION_VERSION
-            enableStorageOptimizer = true
-            ignoreFileNames = false
         }
 
         tdClient?.send(
-            TdApi.SetTdlibParameters(parameters),
+            parameters,
             resultHandler
         ) ?: Log.e(TAG, "Cannot send parameters: tdClient is null")
-    }
-
-    /**
-     * State 2: Sends the encryption key to unlock the local database.
-     * Uses an empty key by default (database is stored in app-private storage).
-     */
-    private fun sendEncryptionKey() {
-        // Using empty encryption key - database is protected by Android's app sandbox
-        // For enhanced security, consider using Android Keystore to generate a key
-        tdClient?.send(
-            TdApi.CheckDatabaseEncryptionKey(ByteArray(0)),
-            resultHandler
-        ) ?: Log.e(TAG, "Cannot send encryption key: tdClient is null")
     }
 
     /**
@@ -557,11 +548,17 @@ class TDLibClientManager private constructor() {
         inputMessageContent: TdApi.InputMessageContent,
         callback: (TdApi.Object) -> Unit = {}
     ) {
+        val replyTo: TdApi.InputMessageReplyTo? = if (replyToMessageId != 0L) {
+            TdApi.InputMessageReplyToMessage(replyToMessageId, null, 0)
+        } else {
+            null
+        }
+
         tdClient?.send(
             TdApi.SendMessage(
                 chatId,
-                messageThreadId,
-                replyToMessageId,
+                null,
+                replyTo,
                 options,
                 replyMarkup,
                 inputMessageContent
@@ -587,7 +584,6 @@ class TDLibClientManager private constructor() {
         val inputText = TdApi.InputMessageText(
             TdApi.FormattedText(text, emptyArray()),
             null,
-            false,
             false
         )
         sendMessage(
@@ -670,8 +666,8 @@ class TDLibClientManager private constructor() {
     fun getFile(
         fileId: Int,
         priority: Int = 16,
-        offset: Int = 0,
-        limit: Int = 0,
+        offset: Long = 0,
+        limit: Long = 0,
         synchronous: Boolean = false,
         callback: (TdApi.Object) -> Unit
     ) {
@@ -684,6 +680,230 @@ class TDLibClientManager private constructor() {
     }
 
     /**
+     * Fire-and-forget file download. Progress/completion is delivered via [fileFlow]
+     * as UpdateFile events. Use this for avatars / thumbnails / photos.
+     */
+    fun downloadFile(fileId: Int, priority: Int = 1) {
+        getFile(fileId = fileId, priority = priority) { /* result arrives via UpdateFile */ }
+    }
+
+    /**
+     * Sends a document (file) message to a chat.
+     */
+    fun sendDocumentMessage(
+        chatId: Long,
+        filePath: String,
+        fileName: String,
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        val inputDocument = TdApi.InputMessageDocument()
+        inputDocument.document = TdApi.InputFileLocal(filePath)
+        inputDocument.disableContentTypeDetection = false
+        sendMessage(chatId = chatId, inputMessageContent = inputDocument, callback = callback)
+    }
+
+    /**
+     * Sends a photo message to a chat.
+     */
+    fun sendPhotoMessage(
+        chatId: Long,
+        filePath: String,
+        width: Int = 1280,
+        height: Int = 1280,
+        caption: String = "",
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        val inputPhoto = TdApi.InputMessagePhoto()
+        inputPhoto.photo = TdApi.InputFileLocal(filePath)
+        inputPhoto.width = width
+        inputPhoto.height = height
+        if (caption.isNotBlank()) {
+            inputPhoto.caption = TdApi.FormattedText(caption, emptyArray())
+        }
+        sendMessage(chatId = chatId, inputMessageContent = inputPhoto, callback = callback)
+    }
+
+    /**
+     * Sends a voice message (audio file) to a chat.
+     */
+    fun sendVoiceMessage(
+        chatId: Long,
+        filePath: String,
+        duration: Int,
+        waveform: ByteArray = ByteArray(0),
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        val inputVoice = TdApi.InputMessageVoiceNote()
+        inputVoice.voiceNote = TdApi.InputFileLocal(filePath)
+        inputVoice.duration = duration
+        inputVoice.waveform = waveform
+        sendMessage(chatId = chatId, inputMessageContent = inputVoice, callback = callback)
+    }
+
+    /**
+     * Gets the list of contacts (users who are contacts of the current user).
+     */
+    fun getContacts(callback: (TdApi.Object) -> Unit) {
+        tdClient?.send(
+            TdApi.GetContacts(),
+            Client.ResultHandler { result ->
+                coroutineScope.launch { callback(result) }
+            }
+        ) ?: Log.e(TAG, "Cannot get contacts: tdClient is null")
+    }
+
+    /**
+     * Gets connected websites / active sessions (other devices logged in).
+     */
+    fun getConnectedWebsites(callback: (TdApi.Object) -> Unit) {
+        tdClient?.send(
+            TdApi.GetConnectedWebsites(),
+            Client.ResultHandler { result ->
+                coroutineScope.launch { callback(result) }
+            }
+        ) ?: Log.e(TAG, "Cannot get connected websites: tdClient is null")
+    }
+
+    /**
+     * Terminates a connected website session by its id.
+     */
+    fun disconnectWebsite(websiteId: Long, callback: (TdApi.Object) -> Unit = {}) {
+        tdClient?.send(
+            TdApi.DisconnectWebsite(websiteId),
+            Client.ResultHandler { result ->
+                coroutineScope.launch { callback(result) }
+            }
+        ) ?: Log.e(TAG, "Cannot disconnect website: tdClient is null")
+    }
+
+    /**
+     * Creates a new basic group chat with the given user ids and title.
+     */
+    fun createNewBasicGroupChat(
+        userIds: LongArray,
+        title: String,
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        // Use default constructor + field assignment to avoid
+        // version-specific constructor signature issues.
+        val create = TdApi.CreateNewBasicGroupChat()
+        create.userIds = userIds
+        create.title = title
+        tdClient?.send(
+            create,
+            Client.ResultHandler { result ->
+                coroutineScope.launch { callback(result) }
+            }
+        ) ?: Log.e(TAG, "Cannot create basic group: tdClient is null")
+    }
+
+    /** Returns an existing private chat with the given user, creating it if needed. */
+    fun createPrivateChat(userId: Long, force: Boolean = true, callback: (TdApi.Object) -> Unit = {}) {
+        val create = TdApi.CreatePrivateChat()
+        create.userId = userId
+        create.force = force
+        tdClient?.send(create, Client.ResultHandler { r -> coroutineScope.launch { callback(r) } })
+            ?: Log.e(TAG, "Cannot create private chat: tdClient is null")
+    }
+
+    /** Creates a new secret chat with the given user. */
+    fun createNewSecretChat(userId: Long, callback: (TdApi.Object) -> Unit = {}) {
+        val create = TdApi.CreateNewSecretChat()
+        create.userId = userId
+        tdClient?.send(create, Client.ResultHandler { r -> coroutineScope.launch { callback(r) } })
+            ?: Log.e(TAG, "Cannot create secret chat: tdClient is null")
+    }
+
+    /** Creates a new supergroup chat (channel when isChannel = true). */
+    fun createNewSupergroupChat(title: String, isChannel: Boolean, callback: (TdApi.Object) -> Unit = {}) {
+        val create = TdApi.CreateNewSupergroupChat()
+        create.title = title
+        create.isChannel = isChannel
+        create.description = ""
+        tdClient?.send(create, Client.ResultHandler { r -> coroutineScope.launch { callback(r) } })
+            ?: Log.e(TAG, "Cannot create supergroup/channel: tdClient is null")
+    }
+
+    /** Deletes a chat from the chat list. */
+    fun deleteChat(chatId: Long, callback: (TdApi.Object) -> Unit = {}) {
+        tdClient?.send(TdApi.DeleteChat(chatId), Client.ResultHandler { r -> coroutineScope.launch { callback(r) } })
+            ?: Log.e(TAG, "Cannot delete chat: tdClient is null")
+    }
+
+    /** Returns the list of active sessions (other devices). */
+    fun getActiveSessions(callback: (TdApi.Object) -> Unit) {
+        tdClient?.send(TdApi.GetActiveSessions(), Client.ResultHandler { r -> coroutineScope.launch { callback(r) } })
+            ?: Log.e(TAG, "Cannot get active sessions: tdClient is null")
+    }
+
+    /** Terminates (logs out) an active session by id. */
+    fun terminateSession(sessionId: Long, callback: (TdApi.Object) -> Unit = {}) {
+        tdClient?.send(TdApi.TerminateSession(sessionId), Client.ResultHandler { r -> coroutineScope.launch { callback(r) } })
+            ?: Log.e(TAG, "Cannot terminate session: tdClient is null")
+    }
+
+    /**
+     * Sets the mute duration for a chat's notification settings.
+     */
+    fun setChatNotificationSettings(
+        chatId: Long,
+        muteFor: Int,
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        // Build full settings so we don't reset other fields to 0/false.
+        val settings = TdApi.ChatNotificationSettings()
+        settings.useDefaultMuteFor = (muteFor == 0)
+        settings.muteFor = muteFor
+        settings.sound = "default"
+        settings.showPreview = true
+        settings.disablePinnedMessageNotifications = false
+        settings.disableMentionNotifications = false
+        tdClient?.send(
+            TdApi.SetChatNotificationSettings(chatId, settings),
+            Client.ResultHandler { result ->
+                coroutineScope.launch { callback(result) }
+            }
+        ) ?: Log.e(TAG, "Cannot set chat notification settings: tdClient is null")
+    }
+
+    /**
+     * Clears the history of a chat (deletes all messages).
+     */
+    fun clearChatHistory(
+        chatId: Long,
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        tdClient?.send(
+            TdApi.DeleteChatHistory(chatId, false, false),
+            Client.ResultHandler { result ->
+                coroutineScope.launch { callback(result) }
+            }
+        ) ?: Log.e(TAG, "Cannot clear chat history: tdClient is null")
+    }
+
+    /**
+     * Searches messages in a specific chat.
+     */
+    fun searchMessagesInChat(
+        chatId: Long,
+        query: String,
+        callback: (TdApi.Object) -> Unit = {}
+    ) {
+        // Use sendFunction with a SearchChatMessages object built via the
+        // default constructor to avoid version-specific constructor signature issues.
+        val search = TdApi.SearchChatMessages()
+        search.chatId = chatId
+        search.query = query
+        search.limit = 100
+        tdClient?.send(
+            search,
+            Client.ResultHandler { result ->
+                coroutineScope.launch { callback(result) }
+            }
+        ) ?: Log.e(TAG, "Cannot search messages: tdClient is null")
+    }
+
+    /**
      * Views messages in a chat (marks them as read).
      *
      * @param chatId The chat identifier
@@ -693,12 +913,11 @@ class TDLibClientManager private constructor() {
      */
     fun viewMessages(
         chatId: Long,
-        messageThreadId: Long = 0,
         messageIds: LongArray,
         forceRead: Boolean = true
     ) {
         tdClient?.send(
-            TdApi.ViewMessages(chatId, messageThreadId, messageIds, forceRead),
+            TdApi.ViewMessages(chatId, messageIds, TdApi.MessageSourceChatHistory(), forceRead),
             resultHandler
         ) ?: Log.e(TAG, "Cannot view messages: tdClient is null")
     }
@@ -736,11 +955,10 @@ class TDLibClientManager private constructor() {
      */
     fun sendChatAction(
         chatId: Long,
-        messageThreadId: Long = 0,
         action: TdApi.ChatAction = TdApi.ChatActionTyping()
     ) {
         tdClient?.send(
-            TdApi.SendChatAction(chatId, messageThreadId, action),
+            TdApi.SendChatAction(chatId, null, "", action),
             resultHandler
         ) ?: Log.e(TAG, "Cannot send chat action: tdClient is null")
     }
@@ -756,7 +974,7 @@ class TDLibClientManager private constructor() {
      * @param function The TDLib function to execute
      * @return The result object
      */
-    fun execute(function: TdApi.Function): TdApi.Object {
+    fun execute(function: TdApi.Function<TdApi.Object>): TdApi.Object {
         return Client.execute(function)
     }
 
@@ -766,7 +984,7 @@ class TDLibClientManager private constructor() {
      * @param function The TDLib function to send
      * @param callback Callback receiving the result
      */
-    fun sendFunction(function: TdApi.Function, callback: (TdApi.Object) -> Unit = {}) {
+    fun sendFunction(function: TdApi.Function<*>, callback: (TdApi.Object) -> Unit = {}) {
         tdClient?.send(
             function,
             Client.ResultHandler { result ->

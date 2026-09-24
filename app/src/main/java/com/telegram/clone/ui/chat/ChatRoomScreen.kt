@@ -1,5 +1,8 @@
 package com.telegram.clone.ui.chat
 
+import android.media.MediaRecorder
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -59,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -70,12 +74,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.telegram.clone.R
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.telegram.clone.data.model.MessageContent
 import com.telegram.clone.data.model.MessageItem
 import com.telegram.clone.data.model.UserStatus
 import com.telegram.clone.ui.theme.ChatBubbleColors
 import com.telegram.clone.ui.theme.DeliveryStatusRead
 import com.telegram.clone.ui.theme.DeliveryStatusSent
+import com.telegram.clone.ui.theme.StatusError
 import com.telegram.clone.ui.theme.StatusOnline
 import com.telegram.clone.ui.theme.TelegramBlue
 import com.telegram.clone.ui.theme.TelegramCloneTheme
@@ -96,12 +103,80 @@ import com.telegram.clone.ui.theme.TextSecondaryLight
 fun ChatRoomScreen(
     chatId: Long,
     onBackClick: () -> Unit,
+    onCallClick: (String, Boolean) -> Unit = { _, _ -> },
     viewModel: ChatRoomViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
     val listState = rememberLazyListState()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var showMoreMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var isRecording by remember { mutableStateOf(false) }
+    var recordSeconds by remember { mutableStateOf(0) }
+    var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var recordFile by remember { mutableStateOf<java.io.File?>(null) }
+    val context = LocalContext.current
+
+    // File picker launcher for attachments
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val fileName = uri.path?.substringAfterLast("/") ?: "file"
+            // Copy file to a temp path TDLib can read
+            val tempFile = java.io.File(context.cacheDir, "attach_${System.currentTimeMillis()}_${fileName}")
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                val repository = com.telegram.clone.data.repository.TelegramRepository.getInstance()
+                // Send as document
+                repository.sendDocumentMessage(chatId, tempFile.absolutePath, fileName) { result ->
+                    scope.launch {
+                        if (result.constructor == org.drinkless.tdlib.TdApi.Error.CONSTRUCTOR) {
+                            val error = result as org.drinkless.tdlib.TdApi.Error
+                            snackbarHostState.showSnackbar("Failed to send: ${error.message}")
+                        } else {
+                            // Refresh messages
+                            delay(200)
+                            viewModel.loadMessages(fromMessageId = 0, limit = 10)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                scope.launch { snackbarHostState.showSnackbar("Failed to attach file: ${e.message}") }
+            }
+        }
+    }
+
+    // Permission launcher for voice recording
+    val recordPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            startVoiceRecording(context)?.let { (recorder, file) ->
+                mediaRecorder = recorder
+                recordFile = file
+                isRecording = true
+            }
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("Microphone permission denied") }
+        }
+    }
+
+    // Recording timer
+    androidx.compose.runtime.LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordSeconds = 0
+            while (isRecording) {
+                kotlinx.coroutines.delay(1000)
+                recordSeconds++
+            }
+        }
+    }
 
     // Initialize ViewModel with chat ID
     LaunchedEffect(chatId) {
@@ -116,50 +191,151 @@ fun ChatRoomScreen(
     }
 
     TelegramCloneTheme {
-        Scaffold(
-            topBar = {
-                ChatRoomTopBar(
-                    title = uiState.chatTitle,
-                    subtitle = viewModel.getUserStatusText(),
-                    userStatus = uiState.userProfile?.status,
-                    onBackClick = onBackClick
-                )
-            },
-            bottomBar = {
-                MessageInputBar(
-                    text = inputText,
-                    onTextChange = viewModel::onInputTextChanged,
-                    onSendClick = {
-                        viewModel.sendMessage()
-                        keyboardController?.hide()
-                    },
-                    onAttachClick = { /* TODO: Attach media */ },
-                    onVoiceClick = { /* TODO: Voice message */ }
-                )
-            },
-            containerColor = ChatBubbleColors.chatBackground()
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                when {
-                    uiState.isLoading && uiState.messages.isEmpty() -> {
-                        LoadingState()
-                    }
-                    uiState.messages.isEmpty() -> {
-                        EmptyChatState()
-                    }
-                    else -> {
-                        MessagesList(
-                            messages = uiState.messages,
-                            viewModel = viewModel,
-                            listState = listState,
-                            onLoadMore = viewModel::loadOlderMessages
+        Box {
+            Scaffold(
+                snackbarHost = {
+                    androidx.compose.material3.SnackbarHost(hostState = snackbarHostState)
+                },
+                topBar = {
+                    ChatRoomTopBar(
+                        title = uiState.chatTitle,
+                        subtitle = viewModel.getUserStatusText(),
+                        userStatus = uiState.userProfile?.status,
+                        onBackClick = onBackClick,
+                        onCallClick = { onCallClick(uiState.chatTitle, false) },
+                        onVideoCallClick = { onCallClick(uiState.chatTitle, true) },
+                        onMoreClick = { showMoreMenu = true }
+                    )
+                },
+                bottomBar = {
+                    if (isRecording) {
+                        RecordingBar(
+                            seconds = recordSeconds,
+                            onStop = {
+                                isRecording = false
+                                try {
+                                    mediaRecorder?.stop()
+                                    mediaRecorder?.release()
+                                    mediaRecorder = null
+                                    recordFile?.let { file ->
+                                        if (file.exists() && file.length() > 0) {
+                                            val repository = com.telegram.clone.data.repository.TelegramRepository.getInstance()
+                                            repository.sendVoiceMessage(chatId, file.absolutePath, recordSeconds) { result ->
+                                                scope.launch {
+                                                    if (result.constructor == org.drinkless.tdlib.TdApi.Error.CONSTRUCTOR) {
+                                                        val error = result as org.drinkless.tdlib.TdApi.Error
+                                                        snackbarHostState.showSnackbar("Failed to send voice: ${error.message}")
+                                                    } else {
+                                                        delay(200)
+                                                        viewModel.loadMessages(fromMessageId = 0, limit = 10)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    scope.launch { snackbarHostState.showSnackbar("Recording error: ${e.message}") }
+                                }
+                                recordFile = null
+                            }
+                        )
+                    } else {
+                        MessageInputBar(
+                            text = inputText,
+                            onTextChange = viewModel::onInputTextChanged,
+                            onSendClick = {
+                                viewModel.sendMessage()
+                                keyboardController?.hide()
+                            },
+                            onAttachClick = { filePickerLauncher.launch("*/*") },
+                            onVoiceClick = {
+                                recordPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            }
                         )
                     }
+                },
+                containerColor = ChatBubbleColors.chatBackground()
+            ) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    when {
+                        uiState.isLoading && uiState.messages.isEmpty() -> {
+                            LoadingState()
+                        }
+                        uiState.messages.isEmpty() -> {
+                            EmptyChatState()
+                        }
+                        else -> {
+                            MessagesList(
+                                messages = uiState.messages,
+                                viewModel = viewModel,
+                                listState = listState,
+                                onLoadMore = viewModel::loadOlderMessages
+                            )
+                        }
+                    }
                 }
+            }
+
+            // More options dropdown menu
+            androidx.compose.material3.DropdownMenu(
+                expanded = showMoreMenu,
+                onDismissRequest = { showMoreMenu = false }
+            ) {
+                val repository = remember { com.telegram.clone.data.repository.TelegramRepository.getInstance() }
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("Delete Chat", color = MaterialTheme.colorScheme.error) },
+                    onClick = { showMoreMenu = false; showDeleteConfirm = true }
+                )
+                val isMuted = repository.isChatMuted(chatId)
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(if (isMuted) "Unmute" else "Mute") },
+                    onClick = {
+                        showMoreMenu = false
+                        repository.setChatMuteDuration(chatId, if (isMuted) 0 else Int.MAX_VALUE) { success ->
+                            scope.launch {
+                                if (success) {
+                                    snackbarHostState.showSnackbar(if (isMuted) "Unmuted" else "Muted")
+                                }
+                            }
+                        }
+                    }
+                )
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("Clear History") },
+                    onClick = {
+                        showMoreMenu = false
+                        repository.clearChatHistory(chatId) { success ->
+                            scope.launch {
+                                if (success) {
+                                    viewModel.loadMessages(fromMessageId = 0, limit = 50)
+                                    snackbarHostState.showSnackbar("Chat history cleared")
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
+            if (showDeleteConfirm) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showDeleteConfirm = false },
+                    title = { Text("Delete Chat?") },
+                    text = { Text("This chat will be removed from your chat list.") },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = {
+                            showDeleteConfirm = false
+                            com.telegram.clone.data.repository.TelegramRepository.getInstance()
+                                .deleteChat(chatId) { success -> if (success) onBackClick() }
+                        }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                    }
+                )
             }
         }
     }
@@ -171,7 +347,10 @@ private fun ChatRoomTopBar(
     title: String,
     subtitle: String,
     userStatus: UserStatus?,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onCallClick: () -> Unit,
+    onVideoCallClick: () -> Unit,
+    onMoreClick: () -> Unit
 ) {
     TopAppBar(
         title = {
@@ -224,21 +403,21 @@ private fun ChatRoomTopBar(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
-            IconButton(onClick = { /* TODO: Voice call */ }) {
+            IconButton(onClick = onCallClick) {
                 Icon(
                     imageVector = Icons.Default.Phone,
                     contentDescription = "Call",
                     tint = Color.White
                 )
             }
-            IconButton(onClick = { /* TODO: Video call */ }) {
+            IconButton(onClick = onVideoCallClick) {
                 Icon(
                     imageVector = Icons.Default.Videocam,
                     contentDescription = "Video call",
                     tint = Color.White
                 )
             }
-            IconButton(onClick = { /* TODO: More options */ }) {
+            IconButton(onClick = onMoreClick) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "More",
@@ -580,41 +759,20 @@ private fun PhotoMessageContent(
     captionColor: Color
 ) {
     Column {
-        content.file?.local?.path?.let { path ->
-            if (path.isNotEmpty()) {
-                AsyncImage(
-                    model = path,
-                    contentDescription = "Photo",
-                    modifier = Modifier
-                        .size(width = 240.dp, height = 180.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
+        com.telegram.clone.ui.components.TdFileImage(
+            file = content.file,
+            contentDescription = "Photo",
+            modifier = Modifier.size(width = 240.dp, height = 180.dp).clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Crop,
+            priority = 16,
+            placeholder = {
                 Box(
-                    modifier = Modifier
-                        .size(width = 240.dp, height = 180.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.size(width = 240.dp, height = 180.dp).clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
-                }
+                ) { CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp) }
             }
-        } ?: run {
-            Box(
-                modifier = Modifier
-                    .size(width = 240.dp, height = 180.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = "📷", fontSize = 32.sp)
-            }
-        }
+        )
 
         if (content.caption.isNotBlank()) {
             Spacer(modifier = Modifier.height(4.dp))
@@ -640,16 +798,14 @@ private fun VideoMessageContent(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            content.thumbnail?.local?.path?.let { path ->
-                if (path.isNotEmpty()) {
-                    AsyncImage(
-                        model = path,
-                        contentDescription = "Video thumbnail",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
+            com.telegram.clone.ui.components.TdFileImage(
+                file = content.thumbnail,
+                contentDescription = "Video thumbnail",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                priority = 16,
+                placeholder = {}
+            )
             // Play button overlay
             Box(
                 modifier = Modifier
@@ -1089,4 +1245,101 @@ private fun formatDuration(seconds: Int): String {
     val mins = seconds / 60
     val secs = seconds % 60
     return "%d:%02d".format(mins, secs)
+}
+
+/**
+ * Creates and starts a [MediaRecorder] for voice messages.
+ * Returns the recorder and the output file, or null on failure.
+ */
+private fun startVoiceRecording(context: android.content.Context): Pair<MediaRecorder, java.io.File>? {
+    return try {
+        val outputFile = java.io.File(context.cacheDir, "voice_${System.currentTimeMillis()}.m4a")
+        val recorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            MediaRecorder(context)
+        } else {
+            @Suppress("DEPRECATION")
+            MediaRecorder()
+        }
+        recorder.apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setAudioEncodingBitRate(128000)
+            setAudioSamplingRate(44100)
+            setOutputFile(outputFile.absolutePath)
+            prepare()
+            start()
+        }
+        Pair(recorder, outputFile)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+@Composable
+private fun RecordingBar(
+    seconds: Int,
+    onStop: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
+            .navigationBarsPadding(),
+        color = ChatBubbleColors.incoming(),
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Pulsing red dot
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(StatusError)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Timer
+            Text(
+                text = formatDuration(seconds),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Slide to cancel hint
+            Text(
+                text = "Slide to cancel ←",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Stop / Send button
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(TelegramBlue),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = onStop) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = "Send voice message",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
 }

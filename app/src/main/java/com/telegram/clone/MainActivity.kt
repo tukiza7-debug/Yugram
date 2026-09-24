@@ -21,8 +21,22 @@ import androidx.navigation.compose.rememberNavController
 import com.telegram.clone.core.config.TelegramConfig
 import com.telegram.clone.data.repository.TelegramRepository
 import com.telegram.clone.ui.auth.LoginScreen
+import com.telegram.clone.ui.calls.CallScreen
+import com.telegram.clone.ui.calls.CallsScreen
 import com.telegram.clone.ui.chat.ChatRoomScreen
+import com.telegram.clone.ui.contacts.ContactsScreen
+import com.telegram.clone.ui.groups.NewGroupScreen
 import com.telegram.clone.ui.home.ChatListScreen
+import com.telegram.clone.ui.newchat.NewChatScreen
+import com.telegram.clone.ui.profile.ProfileScreen
+import com.telegram.clone.ui.settings.AboutScreen
+import com.telegram.clone.ui.settings.AppearanceSettingsScreen
+import com.telegram.clone.ui.settings.DataStorageSettingsScreen
+import com.telegram.clone.ui.settings.DevicesScreen
+import com.telegram.clone.ui.settings.LanguageSettingsScreen
+import com.telegram.clone.ui.settings.NotificationsSettingsScreen
+import com.telegram.clone.ui.settings.PrivacySettingsScreen
+import com.telegram.clone.ui.settings.SettingsScreen
 import com.telegram.clone.ui.theme.TelegramCloneTheme
 import kotlinx.coroutines.flow.collectLatest
 import org.drinkless.tdlib.TdApi
@@ -89,8 +103,24 @@ fun TelegramCloneApp() {
                 onChatClick = { chatId ->
                     navController.navigate(Screen.ChatRoom.createRoute(chatId))
                 },
-                onProfileClick = { /* TODO: Navigate to profile */ },
-                onNewChatClick = { /* TODO: Navigate to new chat */ }
+                onProfileClick = {
+                    navController.navigate(Screen.Profile.route)
+                },
+                onSettingsClick = {
+                    navController.navigate(Screen.Settings.route)
+                },
+                onNewChatClick = {
+                    navController.navigate(Screen.NewChat.route)
+                },
+                onNewGroupClick = {
+                    navController.navigate(Screen.NewGroup.route)
+                },
+                onContactsClick = {
+                    navController.navigate(Screen.Contacts.createRoute())
+                },
+                onCallsClick = {
+                    navController.navigate(Screen.Calls.route)
+                }
             )
         }
 
@@ -101,8 +131,146 @@ fun TelegramCloneApp() {
             val chatId = backStackEntry.arguments?.getLong("chatId") ?: 0L
             ChatRoomScreen(
                 chatId = chatId,
+                onBackClick = { navController.popBackStack() },
+                onCallClick = { contactName, isVideo ->
+                    navController.navigate(Screen.Call.createRoute(chatId, contactName, isVideo))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.Call.route,
+            arguments = Screen.Call.navArguments
+        ) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getLong("chatId") ?: 0L
+            val contactName = backStackEntry.arguments?.getString("contactName") ?: "Contact"
+            val isVideo = backStackEntry.arguments?.getBoolean("isVideo") ?: false
+            CallScreen(
+                chatId = chatId,
+                contactName = contactName,
+                isVideoCall = isVideo,
+                onEndCall = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onBackClick = { navController.popBackStack() },
+                onProfileClick = {
+                    navController.navigate(Screen.Profile.route)
+                },
+                onAppearanceClick = { navController.navigate(Screen.Appearance.route) },
+                onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
+                onPrivacyClick = { navController.navigate(Screen.Privacy.route) },
+                onDevicesClick = { navController.navigate(Screen.Devices.route) },
+                onDataStorageClick = { navController.navigate(Screen.DataStorage.route) },
+                onLanguageClick = { navController.navigate(Screen.Language.route) },
+                onAboutClick = { navController.navigate(Screen.About.route) }
+            )
+        }
+
+        composable(Screen.Profile.route) {
+            ProfileScreen(
                 onBackClick = { navController.popBackStack() }
             )
+        }
+
+        composable(Screen.NewChat.route) {
+            NewChatScreen(
+                onBackClick = { navController.popBackStack() },
+                onNewGroup = { navController.navigate(Screen.NewGroup.route) },
+                onNewSecretChat = { navController.navigate(Screen.Contacts.createRoute("secret")) },
+                onContacts = { navController.navigate(Screen.Contacts.createRoute()) },
+                onSavedMessages = {
+                    val selfId = repository.currentUser.value?.id
+                    if (selfId != null) {
+                        repository.openPrivateChat(selfId) { chatId ->
+                            chatId?.let { navController.navigate(Screen.ChatRoom.createRoute(it)) }
+                        }
+                    }
+                },
+                onChannelCreate = { title ->
+                    repository.createNewChannel(title) { chatId ->
+                        chatId?.let {
+                            navController.navigate(Screen.ChatRoom.createRoute(it)) { popUpTo(Screen.ChatList.route) }
+                        }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.NewGroup.route) {
+            NewGroupScreen(
+                onBackClick = { navController.popBackStack() },
+                onGroupCreated = { chatId ->
+                    navController.navigate(Screen.ChatRoom.createRoute(chatId)) {
+                        popUpTo(Screen.ChatList.route)
+                    }
+                }
+            )
+        }
+
+        composable(
+            route = Screen.Contacts.route,
+            arguments = Screen.Contacts.navArguments
+        ) { backStackEntry ->
+            val pickMode = backStackEntry.arguments?.getString("pickMode")
+            ContactsScreen(
+                onBackClick = { navController.popBackStack() },
+                onContactClick = { chatId ->
+                    navController.navigate(Screen.ChatRoom.createRoute(chatId)) {
+                        popUpTo(Screen.ChatList.route)
+                    }
+                },
+                onContactPick = if (pickMode == "secret") {
+                    { userId ->
+                        repository.createNewSecretChat(userId) { chatId ->
+                            chatId?.let {
+                                navController.navigate(Screen.ChatRoom.createRoute(it)) {
+                                    popUpTo(Screen.ChatList.route)
+                                }
+                            }
+                        }
+                    }
+                } else null
+            )
+        }
+
+        composable(Screen.Calls.route) {
+            CallsScreen(
+                onBackClick = { navController.popBackStack() },
+                onCallClick = { chatId ->
+                    navController.navigate(Screen.ChatRoom.createRoute(chatId))
+                }
+            )
+        }
+
+        composable(Screen.Appearance.route) {
+            AppearanceSettingsScreen(onBackClick = { navController.popBackStack() })
+        }
+
+        composable(Screen.Notifications.route) {
+            NotificationsSettingsScreen(onBackClick = { navController.popBackStack() })
+        }
+
+        composable(Screen.Privacy.route) {
+            PrivacySettingsScreen(onBackClick = { navController.popBackStack() })
+        }
+
+        composable(Screen.Devices.route) {
+            DevicesScreen(onBackClick = { navController.popBackStack() })
+        }
+
+        composable(Screen.DataStorage.route) {
+            DataStorageSettingsScreen(onBackClick = { navController.popBackStack() })
+        }
+
+        composable(Screen.Language.route) {
+            LanguageSettingsScreen(onBackClick = { navController.popBackStack() })
+        }
+
+        composable(Screen.About.route) {
+            AboutScreen(onBackClick = { navController.popBackStack() })
         }
     }
 
@@ -147,4 +315,65 @@ sealed class Screen(val route: String) {
                 }
             )
     }
+
+    object Call : Screen("call/{chatId}/{contactName}/{isVideo}") {
+        fun createRoute(chatId: Long, contactName: String, isVideo: Boolean): String {
+            // Encode contact name to be URL-safe
+            val encodedName = contactName.replace("/", "_")
+            return "call/$chatId/$encodedName/$isVideo"
+        }
+
+        val navArguments: List<androidx.navigation.NamedNavArgument>
+            get() = listOf(
+                androidx.navigation.navArgument("chatId") {
+                    type = androidx.navigation.NavType.LongType
+                    defaultValue = 0L
+                },
+                androidx.navigation.navArgument("contactName") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = "Contact"
+                },
+                androidx.navigation.navArgument("isVideo") {
+                    type = androidx.navigation.NavType.BoolType
+                    defaultValue = false
+                }
+            )
+    }
+
+    object Profile : Screen("profile")
+
+    object Settings : Screen("settings")
+
+    object NewChat : Screen("new_chat")
+
+    object NewGroup : Screen("new_group")
+
+    object Contacts : Screen("contacts?pick={pickMode}") {
+        fun createRoute(pickMode: String? = null): String =
+            if (pickMode != null) "contacts?pick=$pickMode" else "contacts"
+        val navArguments: List<androidx.navigation.NamedNavArgument>
+            get() = listOf(
+                androidx.navigation.navArgument("pickMode") {
+                    type = androidx.navigation.NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+    }
+
+    object Calls : Screen("calls")
+
+    object Appearance : Screen("appearance")
+
+    object Notifications : Screen("notifications")
+
+    object Privacy : Screen("privacy")
+
+    object Devices : Screen("devices")
+
+    object DataStorage : Screen("data_storage")
+
+    object Language : Screen("language")
+
+    object About : Screen("about")
 }

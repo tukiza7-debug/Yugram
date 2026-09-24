@@ -13,6 +13,7 @@ import com.telegram.clone.data.model.TdLibModelConverter
 import com.telegram.clone.data.model.UserProfile
 import com.telegram.clone.data.model.UserStatus
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.drinkless.tdlib.TdApi
 import java.util.concurrent.ConcurrentHashMap
 
@@ -39,6 +41,9 @@ class TelegramRepository private constructor() {
 
     companion object {
         private const val TAG = "TelegramRepository"
+
+        /** Per-call timeout (ms) for single TDLib fetches, to avoid indefinite hangs. */
+        private const val TDLIB_CALL_TIMEOUT_MS = 10_000L
 
         @Volatile
         private var INSTANCE: TelegramRepository? = null
@@ -83,13 +88,19 @@ class TelegramRepository private constructor() {
     val connectionState: StateFlow<TdApi.ConnectionState?> = tdLibClient.connectionState
 
     /** New message events */
-    val newMessageFlow: SharedFlow<TdApi.UpdateNewMessage> = tdLibClient.newMessageFlow.asSharedFlow()
+    val newMessageFlow: SharedFlow<TdApi.UpdateNewMessage> = tdLibClient.newMessageFlow
 
     /** User status change events */
-    val userStatusFlow: SharedFlow<TdApi.UpdateUserStatus> = tdLibClient.userStatusFlow.asSharedFlow()
+    val userStatusFlow: SharedFlow<TdApi.UpdateUserStatus> = tdLibClient.userStatusFlow
 
     /** Error events */
-    val errorFlow: SharedFlow<TdApi.Error> = tdLibClient.errorFlow.asSharedFlow()
+    val errorFlow: SharedFlow<TdApi.Error> = tdLibClient.errorFlow
+
+    /** File download updates (delegated from TDLibClientManager) */
+    val fileFlow: SharedFlow<TdApi.File> = tdLibClient.fileFlow
+
+    /** Triggers a fire-and-forget download; completion arrives via [fileFlow]. */
+    fun downloadFile(fileId: Int, priority: Int = 1) = tdLibClient.downloadFile(fileId, priority)
 
     // ============================================================
     // Initialization
@@ -146,13 +157,6 @@ class TelegramRepository private constructor() {
                 val unreadUpdate = update as TdApi.UpdateChatIsMarkedAsUnread
                 chatCache[unreadUpdate.chatId]?.let { chat ->
                     chat.isMarkedAsUnread = unreadUpdate.isMarkedAsUnread
-                    rebuildChatList()
-                }
-            }
-            TdApi.UpdateChatIsPinned.CONSTRUCTOR -> {
-                val pinnedUpdate = update as TdApi.UpdateChatIsPinned
-                chatCache[pinnedUpdate.chatId]?.let { chat ->
-                    // Update positions list
                     rebuildChatList()
                 }
             }
@@ -228,6 +232,12 @@ class TelegramRepository private constructor() {
      */
     fun loadChats(limit: Int = 100) {
         coroutineScope.launch {
+            // Don't flip the loading flag (which would leave a spinner stuck forever)
+            // if TDLib isn't initialized yet — the UI retries this once auth is Ready.
+            if (!tdLibClient.isInitialized()) {
+                _isLoadingChats.value = false
+                return@launch
+            }
             _isLoadingChats.value = true
             tdLibClient.loadChats(limit = limit) { result ->
                 coroutineScope.launch {
@@ -257,21 +267,13 @@ class TelegramRepository private constructor() {
         val avatarPhoto = when (chatType) {
             ChatType.PRIVATE -> {
                 val userId = (chat.type as TdApi.ChatTypePrivate).userId
-                getUser(userId)?.profilePhoto?.let { photo ->
-                    TdLibModelConverter.getSmallPhotoFile(photo)
-                }
+                getUser(userId)?.profilePhoto?.small
             }
             ChatType.SECRET -> {
                 val userId = (chat.type as TdApi.ChatTypeSecret).userId
-                getUser(userId)?.profilePhoto?.let { photo ->
-                    TdLibModelConverter.getSmallPhotoFile(photo)
-                }
+                getUser(userId)?.profilePhoto?.small
             }
-            else -> {
-                chat.photo?.let { photo ->
-                    TdLibModelConverter.getSmallPhotoFile(photo.small)
-                }
-            }
+            else -> chat.photo?.small
         }
 
         return ChatItem(
@@ -289,7 +291,7 @@ class TelegramRepository private constructor() {
             senderName = senderName,
             isOutgoing = isOutgoing,
             messageSendingState = chat.lastMessage?.let { convertMessageSendingState(it.sendingState) },
-            draftMessage = chat.draftMessage?.inputMessageText?.text?.text
+            draftMessage = chat.draftMessage?.inputMessageText?.let { (it as? TdApi.InputMessageText)?.text?.text }
         )
     }
 
@@ -411,9 +413,7 @@ class TelegramRepository private constructor() {
         val avatarPhoto = when (message.senderId.constructor) {
             TdApi.MessageSenderUser.CONSTRUCTOR -> {
                 val userId = (message.senderId as TdApi.MessageSenderUser).userId
-                getUser(userId)?.profilePhoto?.let { photo ->
-                    TdLibModelConverter.getSmallPhotoFile(photo)
-                }
+                getUser(userId)?.profilePhoto?.small
             }
             else -> null
         }
@@ -426,7 +426,7 @@ class TelegramRepository private constructor() {
         }
 
         val sendingState = convertMessageSendingState(message.sendingState)
-        val isRead = message.interactionInfo?.isRead ?: (message.sendingState == null && !isOutgoing)
+        val isRead = message.sendingState == null && !isOutgoing
 
         return MessageItem(
             messageId = message.id,
@@ -440,7 +440,7 @@ class TelegramRepository private constructor() {
             date = message.date,
             isOutgoing = isOutgoing,
             isEdited = message.editDate != 0,
-            replyToMessageId = message.replyTo?.messageId ?: 0,
+            replyToMessageId = (message.replyTo as? TdApi.MessageReplyToMessage)?.messageId ?: 0,
             forwardInfo = forwardInfo,
             sendingState = sendingState,
             isRead = isRead,
@@ -450,25 +450,25 @@ class TelegramRepository private constructor() {
         )
     }
 
-    private fun convertMessageForwardOrigin(origin: TdApi.MessageForwardOrigin): MessageForwardOrigin {
+    private fun convertMessageForwardOrigin(origin: TdApi.MessageOrigin): MessageForwardOrigin {
         return when (origin.constructor) {
-            TdApi.MessageForwardOriginUser.CONSTRUCTOR -> {
-                val userOrigin = origin as TdApi.MessageForwardOriginUser
+            TdApi.MessageOriginUser.CONSTRUCTOR -> {
+                val userOrigin = origin as TdApi.MessageOriginUser
                 MessageForwardOrigin.User(
                     userId = userOrigin.senderUserId,
                     userName = ""
                 )
             }
-            TdApi.MessageForwardOriginChat.CONSTRUCTOR -> {
-                val chatOrigin = origin as TdApi.MessageForwardOriginChat
+            TdApi.MessageOriginChat.CONSTRUCTOR -> {
+                val chatOrigin = origin as TdApi.MessageOriginChat
                 MessageForwardOrigin.Chat(
                     chatId = chatOrigin.senderChatId,
                     chatName = "",
                     authorSignature = chatOrigin.authorSignature
                 )
             }
-            TdApi.MessageForwardOriginChannel.CONSTRUCTOR -> {
-                val channelOrigin = origin as TdApi.MessageForwardOriginChannel
+            TdApi.MessageOriginChannel.CONSTRUCTOR -> {
+                val channelOrigin = origin as TdApi.MessageOriginChannel
                 MessageForwardOrigin.Channel(
                     chatId = channelOrigin.chatId,
                     chatName = "",
@@ -476,13 +476,9 @@ class TelegramRepository private constructor() {
                     authorSignature = channelOrigin.authorSignature
                 )
             }
-            TdApi.MessageForwardOriginHiddenUser.CONSTRUCTOR -> {
-                val hiddenOrigin = origin as TdApi.MessageForwardOriginHiddenUser
+            TdApi.MessageOriginHiddenUser.CONSTRUCTOR -> {
+                val hiddenOrigin = origin as TdApi.MessageOriginHiddenUser
                 MessageForwardOrigin.HiddenUser(senderName = hiddenOrigin.senderName)
-            }
-            TdApi.MessageForwardOriginMessageImport.CONSTRUCTOR -> {
-                val importOrigin = origin as TdApi.MessageForwardOriginMessageImport
-                MessageForwardOrigin.MessageImport(senderName = importOrigin.senderName)
             }
             else -> MessageForwardOrigin.HiddenUser(senderName = "Unknown")
         }
@@ -601,24 +597,30 @@ class TelegramRepository private constructor() {
 
     /**
      * Gets a user from cache or fetches from TDLib if not cached.
+     *
+     * Uses a CompletableDeferred with a timeout instead of a manually-locked
+     * Mutex: the previous Mutex(true) + lock() pattern would suspend forever
+     * (freezing the chat list / chat room) if the TDLib callback never fired —
+     * e.g. when the native client wasn't initialized yet, or on error paths.
      */
     suspend fun getUser(userId: Long): TdApi.User? {
-        return userCache[userId] ?: run {
-            var result: TdApi.User? = null
-            val mutex = Mutex(true)
-            tdLibClient.getUser(userId) { obj ->
-                coroutineScope.launch {
-                    if (obj.constructor == TdApi.User.CONSTRUCTOR) {
-                        val user = obj as TdApi.User
-                        userCache[userId] = user
-                        result = user
-                    }
-                    mutex.unlock()
+        userCache[userId]?.let { return it }
+        if (!tdLibClient.isInitialized()) return null
+
+        val deferred = CompletableDeferred<TdApi.User?>()
+        tdLibClient.getUser(userId) { obj ->
+            coroutineScope.launch {
+                val user = if (obj.constructor == TdApi.User.CONSTRUCTOR) {
+                    val u = obj as TdApi.User
+                    userCache[userId] = u
+                    u
+                } else {
+                    null
                 }
+                deferred.complete(user)
             }
-            mutex.lock()
-            result
         }
+        return withTimeoutOrNull(TDLIB_CALL_TIMEOUT_MS) { deferred.await() }
     }
 
     /**
@@ -633,14 +635,14 @@ class TelegramRepository private constructor() {
             username = user.usernames?.activeUsernames?.firstOrNull(),
             phoneNumber = user.phoneNumber,
             bio = null, // Requires getUserFullInfo
-            avatarPhoto = user.profilePhoto?.let { TdLibModelConverter.getSmallPhotoFile(it) },
+            avatarPhoto = user.profilePhoto?.small,
             status = TdLibModelConverter.convertUserStatus(user.status),
             isContact = user.isContact,
             isMutualContact = user.isMutualContact,
-            isVerified = user.isVerified,
+            isVerified = user.verificationStatus?.isVerified ?: false,
             isSupport = user.isSupport,
-            isScam = user.isScam,
-            isFake = user.isFake,
+            isScam = user.verificationStatus?.isScam ?: false,
+            isFake = user.verificationStatus?.isFake ?: false,
             haveAccess = user.haveAccess,
             languageCode = user.languageCode
         )
@@ -656,23 +658,281 @@ class TelegramRepository private constructor() {
 
     /**
      * Gets a chat from cache or fetches it.
+     *
+     * Uses a CompletableDeferred + timeout (see [getUser] for rationale) to
+     * avoid the permanent suspension the old Mutex(true) pattern caused when
+     * the TDLib callback never fired.
      */
     suspend fun getChat(chatId: Long): TdApi.Chat? {
-        return chatCache[chatId] ?: run {
-            var result: TdApi.Chat? = null
-            val mutex = Mutex(true)
-            tdLibClient.getChat(chatId) { obj ->
-                coroutineScope.launch {
-                    if (obj.constructor == TdApi.Chat.CONSTRUCTOR) {
-                        val chat = obj as TdApi.Chat
-                        chatCache[chatId] = chat
-                        result = chat
+        chatCache[chatId]?.let { return it }
+        if (!tdLibClient.isInitialized()) return null
+
+        val deferred = CompletableDeferred<TdApi.Chat?>()
+        tdLibClient.getChat(chatId) { obj ->
+            coroutineScope.launch {
+                val chat = if (obj.constructor == TdApi.Chat.CONSTRUCTOR) {
+                    val c = obj as TdApi.Chat
+                    chatCache[chatId] = c
+                    c
+                } else {
+                    null
+                }
+                deferred.complete(chat)
+            }
+        }
+        return withTimeoutOrNull(TDLIB_CALL_TIMEOUT_MS) { deferred.await() }
+    }
+
+    // ============================================================
+    // Contacts Operations
+    // ============================================================
+
+    /**
+     * Gets the list of contacts (users) from TDLib.
+     */
+    fun getContacts(onResult: (List<TdApi.User>) -> Unit) {
+        tdLibClient.getContacts { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Users.CONSTRUCTOR) {
+                    val users = result as TdApi.Users
+                    val contactUsers = mutableListOf<TdApi.User>()
+                    for (userId in users.userIds) {
+                        getUser(userId)?.let { contactUsers.add(it) }
                     }
-                    mutex.unlock()
+                    onResult(contactUsers)
+                } else {
+                    onResult(emptyList())
                 }
             }
-            mutex.lock()
-            result
         }
+    }
+
+    /**
+     * Searches for public chats/users by username.
+     */
+    fun searchPublicChats(query: String, onResult: (List<TdApi.Chat>) -> Unit) {
+        tdLibClient.sendFunction(TdApi.SearchPublicChats(query)) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Chats.CONSTRUCTOR) {
+                    val chats = result as TdApi.Chats
+                    val found = mutableListOf<TdApi.Chat>()
+                        for (chatId in chats.chatIds) {
+                            getChat(chatId)?.let { found.add(it) }
+                        }
+                    onResult(found)
+                } else {
+                    onResult(emptyList())
+                }
+            }
+        }
+    }
+
+    /**
+     * Creates or opens a private chat with a user, returning the chat id.
+     */
+    fun createPrivateChat(userId: Long, onResult: (Long?) -> Unit) {
+        tdLibClient.sendFunction(TdApi.CreatePrivateChat(userId, false)) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Chat.CONSTRUCTOR) {
+                    val chat = result as TdApi.Chat
+                    chatCache[chat.id] = chat
+                    rebuildChatList()
+                    onResult(chat.id)
+                } else {
+                    onResult(null)
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // Connected Devices / Active Sessions
+    // ============================================================
+
+    /**
+     * Gets connected websites (other logged-in sessions on different devices).
+     */
+    fun getConnectedWebsites(onResult: (List<TdApi.ConnectedWebsite>) -> Unit) {
+        tdLibClient.getConnectedWebsites { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.ConnectedWebsites.CONSTRUCTOR) {
+                    val websites = result as TdApi.ConnectedWebsites
+                    onResult(websites.websites.toList())
+                } else {
+                    onResult(emptyList())
+                }
+            }
+        }
+    }
+
+    /**
+     * Terminates a connected website session.
+     */
+    fun disconnectWebsite(websiteId: Long, onResult: (Boolean) -> Unit = {}) {
+        tdLibClient.disconnectWebsite(websiteId) { result ->
+            coroutineScope.launch {
+                onResult(result.constructor == TdApi.Ok.CONSTRUCTOR)
+            }
+        }
+    }
+
+    // ============================================================
+    // Group Creation
+    // ============================================================
+
+    /**
+     * Creates a new basic group chat with the given user ids and title.
+     */
+    fun createNewBasicGroupChat(
+        userIds: LongArray,
+        title: String,
+        onResult: (Long?) -> Unit
+    ) {
+        tdLibClient.createNewBasicGroupChat(userIds, title) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Chat.CONSTRUCTOR) {
+                    val chat = result as TdApi.Chat
+                    chatCache[chat.id] = chat
+                    rebuildChatList()
+                    onResult(chat.id)
+                } else {
+                    onResult(null)
+                }
+            }
+        }
+    }
+
+    /** Opens (creating if needed) the private chat with the given user. Used for Saved Messages. */
+    fun openPrivateChat(userId: Long, onResult: (Long?) -> Unit) {
+        tdLibClient.createPrivateChat(userId, force = true) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Chat.CONSTRUCTOR) {
+                    val chat = result as TdApi.Chat
+                    chatCache[chat.id] = chat
+                    rebuildChatList()
+                    onResult(chat.id)
+                } else onResult(null)
+            }
+        }
+    }
+
+    /** Creates a secret chat with a user; returns the new chat id. */
+    fun createNewSecretChat(userId: Long, onResult: (Long?) -> Unit) {
+        tdLibClient.createNewSecretChat(userId) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Chat.CONSTRUCTOR) {
+                    val chat = result as TdApi.Chat
+                    chatCache[chat.id] = chat
+                    rebuildChatList()
+                    onResult(chat.id)
+                } else onResult(null)
+            }
+        }
+    }
+
+    /** Creates a channel (broadcast) supergroup; returns the new chat id. */
+    fun createNewChannel(title: String, onResult: (Long?) -> Unit) {
+        tdLibClient.createNewSupergroupChat(title, isChannel = true) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Chat.CONSTRUCTOR) {
+                    val chat = result as TdApi.Chat
+                    chatCache[chat.id] = chat
+                    rebuildChatList()
+                    onResult(chat.id)
+                } else onResult(null)
+            }
+        }
+    }
+
+    /** Deletes a chat from the chat list. */
+    fun deleteChat(chatId: Long, onResult: (Boolean) -> Unit = {}) {
+        tdLibClient.deleteChat(chatId) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Ok.CONSTRUCTOR) { chatCache.remove(chatId); rebuildChatList() }
+                onResult(result.constructor == TdApi.Ok.CONSTRUCTOR)
+            }
+        }
+    }
+
+    /** Fetches active sessions (devices). */
+    fun getActiveSessions(onResult: (List<TdApi.Session>) -> Unit) {
+        tdLibClient.getActiveSessions { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Sessions.CONSTRUCTOR) onResult((result as TdApi.Sessions).sessions.toList())
+                else onResult(emptyList())
+            }
+        }
+    }
+
+    /** Terminates an active session by id. */
+    fun terminateSession(sessionId: Long, onResult: (Boolean) -> Unit = {}) {
+        tdLibClient.terminateSession(sessionId) { result ->
+            coroutineScope.launch { onResult(result.constructor == TdApi.Ok.CONSTRUCTOR) }
+        }
+    }
+
+    // ============================================================
+    // Media Sending
+    // ============================================================
+
+    /**
+     * Sends a document (file) message to a chat.
+     */
+    fun sendDocumentMessage(chatId: Long, filePath: String, fileName: String, onResult: (TdApi.Object) -> Unit = {}) {
+        tdLibClient.sendDocumentMessage(chatId, filePath, fileName, onResult)
+    }
+
+    /**
+     * Sends a photo message to a chat.
+     */
+    fun sendPhotoMessage(chatId: Long, filePath: String, caption: String = "", onResult: (TdApi.Object) -> Unit = {}) {
+        tdLibClient.sendPhotoMessage(chatId, filePath, caption = caption, callback = onResult)
+    }
+
+    /**
+     * Sends a voice message to a chat.
+     */
+    fun sendVoiceMessage(chatId: Long, filePath: String, duration: Int, onResult: (TdApi.Object) -> Unit = {}) {
+        tdLibClient.sendVoiceMessage(chatId, filePath, duration, callback = onResult)
+    }
+
+    // ============================================================
+    // Chat Management
+    // ============================================================
+
+    /**
+     * Sets the mute duration for a chat (0 = unmute, >0 = muted for that many seconds).
+     */
+    fun setChatMuteDuration(chatId: Long, muteForSeconds: Int, onResult: (Boolean) -> Unit = {}) {
+        tdLibClient.setChatNotificationSettings(chatId, muteForSeconds) { result ->
+            coroutineScope.launch {
+                onResult(result.constructor == TdApi.Ok.CONSTRUCTOR)
+            }
+        }
+    }
+
+    /**
+     * Clears the history of a chat (deletes all messages).
+     */
+    fun clearChatHistory(chatId: Long, onResult: (Boolean) -> Unit = {}) {
+        tdLibClient.clearChatHistory(chatId) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Ok.CONSTRUCTOR) {
+                    messageCacheMutex.withLock {
+                        messageCache[chatId]?.clear()
+                    }
+                    onResult(true)
+                } else {
+                    onResult(false)
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks whether a chat is currently muted (from cache).
+     */
+    fun isChatMuted(chatId: Long): Boolean {
+        return chatCache[chatId]?.notificationSettings?.muteFor?.let { it > 0 } ?: false
     }
 }
