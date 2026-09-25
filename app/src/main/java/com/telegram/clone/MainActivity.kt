@@ -9,10 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -79,9 +77,7 @@ class MainActivity : ComponentActivity() {
             TelegramCloneTheme {
                 NovaAppLockGate {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(WindowInsets(0, 0, 0, 0))
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         TelegramCloneApp()
                     }

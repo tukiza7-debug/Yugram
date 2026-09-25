@@ -1180,6 +1180,7 @@ private fun PollMessageContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun MessageInputBar(
     text: String,
@@ -1375,7 +1376,7 @@ private fun ScheduleSendDialog(
         },
         confirmButton = {},
         dismissButton = {
-            androidx.compose.material3.Row(
+            Row(
                 modifier = Modifier.padding(end = 8.dp)
             ) {
                 androidx.compose.material3.TextButton(onClick = { onSchedule(60L) }) {

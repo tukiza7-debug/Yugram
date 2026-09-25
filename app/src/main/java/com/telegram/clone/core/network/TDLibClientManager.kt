@@ -1057,13 +1057,8 @@ class TDLibClientManager private constructor() {
         ) ?: Log.e(TAG, "Cannot delete profile photo: tdClient is null")
     }
 
-    /** Gets full user info including bio (TdApi.GetUserFullInfo). */
-    fun getUserFullInfo(userId: Long, callback: (TdApi.Object) -> Unit) {
-        tdClient?.send(
-            TdApi.GetUserFullInfo(userId),
-            Client.ResultHandler { r -> coroutineScope.launch { callback(r) } }
-        ) ?: Log.e(TAG, "Cannot get user full info: tdClient is null")
-    }
+    // NOTE: getUserFullInfo(userId, callback) already exists in the
+    // Chat Operations section — do not re-declare it (conflicting overloads).
 
     // ============================================================
     // Reactions & Scheduling (Yugram premium-style features)
