@@ -46,6 +46,10 @@ class ApiError extends Error {
     return new ApiError(429, 'RATE_LIMITED', message);
   }
 
+  static payloadTooLarge(message, details) {
+    return new ApiError(413, 'PAYLOAD_TOO_LARGE', message, details);
+  }
+
   static internal(message) {
     return new ApiError(500, 'INTERNAL_ERROR', message);
   }

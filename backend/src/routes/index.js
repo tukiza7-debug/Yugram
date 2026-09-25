@@ -11,7 +11,7 @@
 const { Router } = require('express');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 const { validate } = require('../middlewares/validate.middleware');
-const { upload } = require('../middlewares/upload.middleware');
+const { uploadSingleSafe } = require('../middlewares/upload.middleware');
 const { asyncHandler } = require('../utils/asyncHandler');
 const authController = require('../controllers/auth.controller');
 const userController = require('../controllers/user.controller');
@@ -58,7 +58,7 @@ router.get(
 // ------------------------------------------------------------------
 // Media (FASA 2) - multipart upload
 // ------------------------------------------------------------------
-router.post('/media', authMiddleware, upload.single('file'), asyncHandler(mediaController.uploadMedia));
+router.post('/media', authMiddleware, uploadSingleSafe('file'), asyncHandler(mediaController.uploadMedia));
 
 // ------------------------------------------------------------------
 // Bilik (FASA 1 + 2)

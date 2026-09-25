@@ -62,4 +62,36 @@ const upload = multer({
   },
 });
 
-module.exports = { upload, UPLOAD_DIR };
+/**
+ * Pembalut multer.single('file') yang menukar MulterError kepada
+ * ApiError berstruktur (413 untuk fail terlalu besar, 400 untuk ralat
+ * lain) supaya klien menerima JSON ralat yang jelas, bukan 500.
+ * @param {string} fieldName Nama medan multipart.
+ * @returns {import('express').RequestHandler}
+ */
+function uploadSingleSafe(fieldName) {
+  return (req, res, next) => {
+    upload.single(fieldName)(req, res, (err) => {
+      if (!err) {
+        next();
+        return;
+      }
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          const maxMb = Math.round(MEDIA_MAX_SIZE_BYTES / (1024 * 1024));
+          next(
+            ApiError.payloadTooLarge(`Fail melebihi had saiz ${maxMb} MB`, [
+              { field: 'file', message: `Saiz maksimum dibenarkan: ${maxMb} MB` },
+            ])
+          );
+          return;
+        }
+        next(ApiError.badRequest(`Muat naik gagal: ${err.code}`));
+        return;
+      }
+      next(err);
+    });
+  };
+}
+
+module.exports = { upload, uploadSingleSafe, UPLOAD_DIR };

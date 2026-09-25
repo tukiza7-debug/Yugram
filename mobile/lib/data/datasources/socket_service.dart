@@ -120,7 +120,7 @@ class SocketService {
       _log.error('Gagal memulakan socket', err, stackTrace);
       _setState(SocketConnectionState.failed);
       _safeAddError(
-        SocketErrorPayload(code: 'CONNECT_FAILED', message: 'Gagal memulakan sambungan socket'),
+        const SocketErrorPayload(code: 'CONNECT_FAILED', message: 'Gagal memulakan sambungan socket'),
       );
     }
   }

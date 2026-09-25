@@ -1,7 +1,7 @@
 {
   "name": "yugram-chat-backend",
   "version": "1.0.0",
-  "description": "Yugram FASA 1 - Real-time chat backend (Node.js + Socket.io + PostgreSQL + Sequelize). Sembang peribadi 1-ke-1, ticks hantar/baca, typing, reactions, silent messages.",
+  "description": "Yugram chat backend (Node.js + Socket.io + PostgreSQL + Sequelize) - sembang peribadi + kumpulan + media + edit/padam/forward/carian.",
   "main": "src/server.js",
   "private": true,
   "engines": {
@@ -13,7 +13,8 @@
     "db:sync": "node scripts/db-sync.js",
     "smoke-test": "node scripts/smoke-test.js",
     "syntax-check": "node scripts/syntax-check.js",
-    "smoke-test:fasa23": "node scripts/smoke-test-fasa23.js"
+    "smoke-test:fasa23": "node scripts/smoke-test-fasa23.js",
+    "uji-semua": "node scripts/uji-semua.js"
   },
   "keywords": [
     "chat",

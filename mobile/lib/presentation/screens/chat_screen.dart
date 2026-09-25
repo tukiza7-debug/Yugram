@@ -363,7 +363,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       duration: const Duration(milliseconds: 200),
                       style: TextStyle(
                         fontSize: 12,
-                        color: typing ? scheme.primaryContainer : scheme.onPrimary.withOpacity(0.8),
+                        color: typing ? scheme.primaryContainer : scheme.onPrimary.withValues(alpha: 0.8),
                       ),
                       child: Text(_subtitleFor(state), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
@@ -382,7 +382,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   tooltip: 'Info kumpulan',
                   icon: const Icon(Icons.info_outline),
                   onPressed: () async {
-                    await Navigator.of(context).push(
+                    final NavigatorState navigator = Navigator.of(context);
+                    await navigator.push(
                       MaterialPageRoute<void>(
                         builder: (BuildContext context) => GroupInfoScreen(
                           roomId: widget.room.id,
@@ -394,7 +395,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     );
                     // Kumpulan mungkin dipadam/ditinggalkan - tutup sembang.
                     if (_chatBloc.state.roomDeleted && mounted) {
-                      Navigator.of(context).pop();
+                      navigator.pop();
                     }
                   },
                 ),
@@ -481,7 +482,7 @@ class _ChatScreenState extends State<ChatScreen> {
           decoration: BoxDecoration(
             color: scheme.surface,
             boxShadow: <BoxShadow>[
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2)),
+              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, -2)),
             ],
           ),
           child: SafeArea(
@@ -547,7 +548,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ? 'Edit mesej...'
                                 : 'Tulis mesej...',
                             filled: true,
-                            fillColor: scheme.surfaceContainerHighest.withOpacity(0.5),
+                            fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             border: OutlineInputBorder(
@@ -592,7 +593,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-      color: scheme.primary.withOpacity(0.06),
+      color: scheme.primary.withValues(alpha: 0.06),
       child: Row(
         children: <Widget>[
           Expanded(

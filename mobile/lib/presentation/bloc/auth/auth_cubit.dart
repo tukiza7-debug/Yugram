@@ -45,9 +45,7 @@ class AuthFailure extends AuthState {
 }
 
 class AuthCubit extends Cubit<AuthState> {
-  AuthCubit({required AuthRepository authRepository})
-      : authRepository = authRepository,
-        super(const AuthInitial()) {
+  AuthCubit({required this.authRepository}) : super(const AuthInitial()) {
     _log = AppLogger('AuthCubit');
   }
 

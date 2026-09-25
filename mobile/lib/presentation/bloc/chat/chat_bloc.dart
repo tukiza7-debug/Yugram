@@ -23,13 +23,11 @@ import 'chat_state.dart';
 ///   - Silent: MessageSubmitted(isSilent) -> emit send_message
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
-    required ChatRepository repository,
+    required this.repository,
     required this.roomId,
     required this.currentUserId,
     required String roomTitle,
-  })  : repository = repository,
-        roomTitle = roomTitle,
-        super(ChatState.initial(roomTitle: roomTitle)) {
+  }) : super(ChatState.initial(roomTitle: roomTitle)) {
     _log = AppLogger('ChatBloc:$roomId');
 
     on<ChatStarted>(_onChatStarted);
@@ -120,7 +118,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatRepository repository;
   final String roomId;
   final String currentUserId;
-  final String roomTitle;
 
   late final AppLogger _log;
   late final List<StreamSubscription<dynamic>> _subscriptions;
@@ -542,7 +539,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   void _onStreamError(Object error, StackTrace stackTrace) {
     _log.error('Ralat strim masa nyata', error, stackTrace);
-    _safeAddEvent(ErrorReceived(message: 'Sambungan masa nyata mengalami ralat'));
+    _safeAddEvent(const ErrorReceived(message: 'Sambungan masa nyata mengalami ralat'));
   }
 
   /// Menambah event dengan selamat - strim mungkin masih aktif selepas

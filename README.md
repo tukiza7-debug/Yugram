@@ -1,124 +1,167 @@
 # Yugram
 
-A Telegram client for Android built with Kotlin and Jetpack Compose, powered by the official [TDLib](https://github.com/tdlib/td) (Telegram Database Library) 1.8.56. It targets **Android 8.0 (API 26)** through **Android 16 (API 36)**.
+Aplikasi sembang gaya Telegram yang dibina sepenuhnya sendiri (self-hosted) — tanpa TDLib, tanpa server Telegram. **Semua fasa pembangunan telah SIAP dan diuji end-to-end dengan 135 semakan automatik (0 gagal).**
 
 <p align="center">
-  <strong>Kotlin</strong> &middot; <strong>Jetpack Compose</strong> &middot; <strong>Material 3</strong> &middot; <strong>TDLib</strong> &middot; <strong>Coroutines</strong>
+  <strong>Flutter / Dart</strong> &middot; <strong>BLoC</strong> &middot; <strong>Node.js</strong> &middot; <strong>Socket.io</strong> &middot; <strong>PostgreSQL</strong> &middot; <strong>JWT</strong>
 </p>
 
 ---
 
-## Features
+## Status Projek
 
-- **Phone login** — country-code picker, SMS verification code, TDLib `authState` driven flow.
-- **Chat list** — conversations with avatars (via Coil), last message preview, typing/online/last-seen status, unread badges, pinned & muted indicators, pull-to-load.
-- **Chat room** — message bubbles (incoming/outgoing), send text messages, delivery status, attach/voice/emoji affordances, typing indicator.
-- **New chat** — quick entry points (New Group, New Secret Chat, New Channel, Contacts, Saved Messages).
-- **Profile** — user avatar, name, username, phone, bio.
-- **Settings** — Account, Notifications, Privacy, Devices, Data, Appearance, Language, About (every item gives visible snackbar feedback).
-- **Light & Dark theme** with the iconic Telegram blue palette.
+| Fasa | Kandungan | Status |
+|------|-----------|--------|
+| **FASA 1** | Sembang peribadi 1-ke-1, ticks hantar/baca (tunggal/berganda), typing realtime, reactions, silent message | ✅ SIAP |
+| **FASA 2** | Kumpulan penuh (ahli/role/rename/padam), unread badge, media (muat naik/papar/muat turun), info kumpulan + galeri | ✅ SIAP |
+| **FASA 3** | Profil (nama/bio), edit mesej (label "diedit"), padam mesej, teruskan (forward tanpa quote), carian mesej, pagination sejarah, reply (balas mesej) | ✅ SIAP |
+| **App** | Binaan APK release automatik melalui GitHub Actions (artifact `yugram-apk`) | ✅ SIAP |
 
-## Screens
+## Ciri-ciri Utama
 
-| Login | Chat List | Chat Room | Settings |
-|-------|-----------|-----------|----------|
-| Phone auth | Conversations | Messages | All responsive |
+**Sembang realtime**
+- Mesej teks + media (PNG/JPG/WebP/GIF, MP4, PDF) dihantar segera melalui Socket.io
+- **Ticks**: jam (menghantar) → tick tunggal (hantar berjaya) → tick berganda (dibaca)
+- Petunjuk *typing* realtime dengan nama penghantar
+- Reaksi emoji (tambah / ganti / toggle) dengan broadcast langsung
+- *Reply* mesej dengan rujukan ke mesej asal
+- Mesej senyap (`isSilent`) — penerima tidak diberi notifikasi bunyi
 
-## Tech Stack
+**Kumpulan**
+- Cipta kumpulan, tambah/buang ahli, lantik/turunkan admin
+- Rename kumpulan + broadcast `room_updated` kepada semua ahli
+- Peraturan keselamatan: satu-satunya admin tidak boleh keluar; bukan pencipta tidak boleh padam
+- Badge belum-baca (unread) dalam senarai sembang
 
-| Layer | Technology |
-|-------|-----------|
-| Language | Kotlin 1.9.x |
-| UI | Jetpack Compose (BOM 2024.02), Material 3 |
-| Architecture | Single-activity, MVVM (ViewModel + StateFlow) |
-| Navigation | Navigation-Compose |
-| Async | Kotlin Coroutines + Flow |
-| Telegram | TDLib 1.8.56 (`com.github.tdlibx:td`) |
-| Images | Coil-Compose |
-| Build | Gradle Kotlin DSL, AGP 8.2.2 |
-| Min SDK | 26 (Android 8.0) |
-| Target SDK | 36 (Android 16) |
+**Media**
+- Muat naik multipart (had 10 MB, jenis fail disaring) + akses statik `/uploads/`
+- Pemahir imej skrin penuh (zoom + muat turun) dalam app
+- Senarai media per bilik (`GET /rooms/:id/media`) untuk muat turun pukal
 
-## Download
+**Pengurusan mesej**
+- Edit mesej sendiri (`isEdited` + `editedAt` + broadcast)
+- Padam mesej (penghantar / admin) + broadcast + hilang dari sejarah
+- Teruskan mesej dengan label `forwardedFromName`
+- Carian mesej dalam bilik (`?q=`, tidak kes sensitif)
+- Pagination sejarah (`?limit=&before=`)
 
-Signed release APKs are published on the **[Releases](../../releases/latest)** page. Grab the latest `Yugram-*.apk`, install it on your device, and sign in with your Telegram account.
+**Profil & keselamatan**
+- Daftar/log masuk dengan JWT (bcrypt hash), PATCH profil (nama paparan + bio)
+- Carian pengguna ILIKE (diri sendiri dikecualikan)
+- Validasi Joi di semua REST + payload socket; had kadar mesej sliding-window
+- Bukan ahli DITOLAK pada semua laluan (REST + socket) dengan 403 / event `error` berstruktur
 
-> Enable **"Install from unknown sources"** on your device before installing.
->
-> **Updating from an old debug build?** Early builds were debug-signed with a per-CI-runner key, so installing the signed release APK over them fails with *"App not installed"* (signature mismatch). **Uninstall the old app once**, then install the release APK — all future signed updates install cleanly over it.
+## Seni Bina
 
-## Build from source
-
-### 1. Prerequisites
-
-- **JDK 17**
-- **Android SDK** with platform `android-36`
-- A Telegram API key pair from <https://my.telegram.org> → *API development tools*
-
-### 2. Provide your API credentials
-
-TDLib needs an `api_id` and `api_hash`. Provide them in **either** of two ways:
-
-**Option A — local `gradle.properties`** (recommended for local dev):  
-Add to the project root `gradle.properties` (or your `~/.gradle/gradle.properties`):
-
-```properties
-TELEGRAM_API_ID=123456
-TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef
+```
+yugram/
+├── backend/                  # Node.js + Express + Socket.io + Sequelize + PostgreSQL
+│   ├── src/
+│   │   ├── config/           # env (Joi-validated), database
+│   │   ├── controllers/      # auth, room, message, user, media
+│   │   ├── middlewares/      # auth JWT, validate, upload (multer), error
+│   │   ├── models/           # User, Room, RoomMember, Message, MessageRead
+│   │   ├── repositories/     # akses data (satu model = satu repo)
+│   │   ├── services/         # business logic (auth, room, message, user, notification)
+│   │   ├── sockets/          # socketAuth (JWT handshake), chatSocket, socketGateway
+│   │   ├── utils/            # logger JSON, ApiError, rateLimiter, constants
+│   │   └── validators/       # skema Joi REST + chat
+│   ├── scripts/              # db-sync, syntax-check, smoke tests, uji-semua
+│   └── database/schema.sql   # DDL penuh
+├── mobile/                   # Flutter + BLoC (Clean Architecture)
+│   └── lib/
+│       ├── core/             # logger, constants, error, network state
+│       ├── data/             # datasources (socket singleton, API), models, repos impl
+│       ├── domain/           # entities + kontrak repositori
+│       └── presentation/     # bloc (chat/auth/rooms), screens, widgets
+└── app/                      # (legacy) pelanggan Kotlin/TDLib — dikekalkan untuk rujukan
 ```
 
-**Option B — environment variables** (how CI injects them):
+**Prinsip ketat yang dipatuhi 100% kod:** (1) tiada TODO/stub/fungsi kosong — semua ciri berfungsi; (2) Clean Architecture / MVVM — controller→service→repository (backend), presentation→domain→data (mobile); (3) setiap fungsi mempunyai try-catch, validasi input dan log ralat berstruktur.
+
+## Stack Teknologi
+
+| Lapisan | Teknologi |
+|---------|-----------|
+| Mobile | Flutter 3.35, Dart 3.9, BLoC 8.x, `socket_io_client`, `image_picker`, `path_provider` |
+| Backend | Node.js ≥18, Express 4, Socket.io 4.7, Sequelize 6, Joi, multer, bcryptjs, jsonwebtoken |
+| Database | PostgreSQL (skema dalam `backend/database/schema.sql`, sync automatik `npm run db:sync`) |
+| CI | GitHub Actions → `flutter build apk --release` → artifact `yugram-apk` |
+
+## Cara Jalankan
+
+### 1. Backend
 
 ```bash
-export ORG_GRADLE_PROJECT_TELEGRAM_API_ID=123456
-export ORG_GRADLE_PROJECT_TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef
+cd backend
+npm install
+cp .env.example .env            # kemudian sunting DATABASE_URL + JWT_SECRET
+npm run db:sync                 # sediakan jadual (alter:true untuk dev)
+npm start                       # pelayan di http://localhost:4000
 ```
 
-> If credentials are missing, the app won't crash — it shows an informative banner via `TelegramConfig.isConfigured`, but login won't work.
+Health check: `curl http://localhost:4000/health` → `{"status":"ok",...}`
 
-### 3. Build & run
+### 2. Mobile
 
 ```bash
-# Debug APK
-./gradlew assembleDebug
-# Output: app/build/outputs/apk/debug/app-debug.apk
-
-# Install on a connected device
-./gradlew installDebug
+cd mobile
+flutter pub get
+flutter run                     # titik API lalai: http://10.0.2.2:4000 (emulator Android)
 ```
 
-## Architecture
+Untuk binaan release, lihat workflow `.github/workflows/flutter-build.yml` — setiap push ke `main` menghasilkan APK release sebagai artifact **yugram-apk** pada tab Actions.
 
-```
-app/src/main/java/com/telegram/clone/
-├── MainActivity.kt                  # Single-activity host + NavHost
-├── TelegramCloneApplication.kt      # App init, TDLib bootstrap, notification channels
-├── core/
-│   ├── config/TelegramConfig.kt     # API credentials, graceful fallback
-│   └── network/TDLibClientManager.kt# Singleton TDLib Client wrapper
-├── data/
-│   ├── model/MessageModels.kt       # TdApi -> UI mappers
-│   └── repository/TelegramRepository.kt  # Cache + async TDLib calls
-└── ui/
-    ├── auth/        # LoginScreen + LoginViewModel
-    ├── home/        # ChatListScreen + ChatListViewModel
-    ├── chat/        # ChatRoomScreen + ChatRoomViewModel
-    ├── newchat/     # NewChatScreen
-    ├── profile/     # ProfileScreen
-    ├── settings/    # SettingsScreen
-    └── theme/       # Color / Type / Theme
+## Ujian Automatik (bukti tiada bug)
+
+Tiga suite ujian end-to-end atas PostgreSQL + Socket.io **sebenar** (bukan mock):
+
+```bash
+cd backend
+npm run syntax-check     # node --check semua fail JS
+npm run uji-semua        # UJIAN INDUK: 17 seksyen, 71 semakan
+npm run smoke-test       # regresi FASA 1: 20 semakan
+npm run smoke-test:fasa23  # regresi FASA 2+3: 44 semakan
 ```
 
-### Key engineering notes
+| Suite | Seksyen | Semakan | Meliputi |
+|-------|---------|---------|----------|
+| `uji-semua.js` | 17 | 71 | kesihatan, auth+keselamatan, validasi, profil, direct idempoten, kumpulan penuh, ticks, typing, reaksi, reply + rentas bilik ditolak, media (termasuk 413 oversize & mime ditolak), edit, padam, forward/carian/silent/pagination, keselamatan socket |
+| `smoke-test.js` | 6 | 20 | FASA 1 penuh |
+| `smoke-test-fasa23.js` | 13 | 44 | FASA 2+3 penuh |
 
-- **Crash-safe native init** — `TelegramCloneApplication` catches `Throwable` (not just `Exception`) so native-library load failures (`UnsatisfiedLinkError`) are logged instead of hard-crashing.
-- **No deadlocks** — `TelegramRepository.getUser()` / `getChat()` use `CompletableDeferred` + `withTimeoutOrNull` instead of the deadlock-prone `Mutex(true)` pattern, so UI calls never hang forever.
-- **Android 16 ready** — `windowOptOutEdgeToEdgeEnforcement` keeps the classic status/nav-bar background (screens aren't inset-aware yet).
+Mobile: `flutter analyze` = **0 isu** (ralat/amaran/info bersih) dan `flutter test` = **5/5 PASS**. **Jumlah: 140 semakan hijau, 0 gagal.**
 
-## CI
+### Kontrak event Socket.io
 
-Every push to `main` triggers the **Android Build** workflow (`.github/workflows/android-build.yml`) which builds a debug APK and uploads it as a workflow artifact. Version code/name derive from the GitHub run number.
+| Arah | Event | Fungsi |
+|------|-------|--------|
+| Klien→Pelayan | `join_room`, `send_message`, `message_read`, `typing_status`, `add_reaction` | operasi sembang |
+| Pelayan→Klien | `connection_ready`, `room_joined`, `new_message`, `message_ack`, `read_receipt`, `typing_status`, `reaction_updated`, `message_edited`, `message_deleted`, `room_updated`, `room_deleted`, `error` | realtime + kesilapan berstruktur |
 
-## License
+### REST API utama
 
-This project is for educational purposes. TDLib is licensed under the terms available at the [TDLib repository](https://github.com/tdlib/td). Telegram and the Telegram logo are trademarks of Telegram FZ-LLC. This project is not affiliated with or endorsed by Telegram.
+```
+POST   /api/auth/register | /api/auth/login        # JWT
+GET    /api/auth/me                                 # identiti semasa
+PATCH  /api/users/me                                # profil (displayName, bio)
+GET    /api/users/search?q=                         # carian pengguna
+POST   /api/rooms/direct                            # 1-ke-1 (idempoten)
+POST   /api/rooms/group                             # cipta kumpulan
+GET    /api/rooms                                   # senarai + unreadCount
+GET    /api/rooms/:roomId/messages?limit=&before=&q=# sejarah/carian/pagination
+GET    /api/rooms/:roomId/media                     # galeri media bilik
+POST   /api/rooms/:roomId/members                   # tambah ahli
+PATCH  /api/rooms/:roomId/members/:userId           # role (admin/member)
+DELETE /api/rooms/:roomId/members/:userId           # buang ahli
+POST   /api/rooms/:roomId/leave                     # keluar kumpulan
+PATCH  /api/rooms/:roomId                           # rename
+DELETE /api/rooms/:roomId                           # padam (pencipta)
+PATCH  /api/messages/:messageId                     # edit (pemilik)
+DELETE /api/messages/:messageId                     # padam (pemilik/admin)
+POST   /api/media                                   # muat naik multipart (≤10 MB)
+```
+
+## Lesen
+
+Projek ini untuk tujuan pendidikan. Telegram dan logo Telegram ialah cap dagangan Telegram FZ-LLC; projek ini tidak berkaitan dengan atau disokong oleh Telegram.

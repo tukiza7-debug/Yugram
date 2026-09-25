@@ -45,9 +45,7 @@ class RoomsLoadFailure extends RoomsState {
 }
 
 class RoomsCubit extends Cubit<RoomsState> {
-  RoomsCubit({required ChatRepository chatRepository})
-      : chatRepository = chatRepository,
-        super(const RoomsLoadInProgress()) {
+  RoomsCubit({required this.chatRepository}) : super(const RoomsLoadInProgress()) {
     _log = AppLogger('RoomsCubit');
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dart:async';
 import 'package:intl/intl.dart';
 
 import '../../data/datasources/media_store.dart';
@@ -38,7 +39,7 @@ class RoomsScreen extends StatelessWidget {
     );
     // Segarkan senarai selepas kembali (kumpulan mungkin berubah).
     if (context.mounted) {
-      context.read<RoomsCubit>().loadRooms();
+      unawaited(context.read<RoomsCubit>().loadRooms());
     }
   }
 
@@ -203,7 +204,7 @@ class RoomsScreen extends StatelessWidget {
             child: ListView.separated(
               itemCount: rooms.length,
               separatorBuilder: (BuildContext context, int index) =>
-                  Divider(height: 1, color: scheme.outlineVariant.withOpacity(0.4)),
+                  Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.4)),
               itemBuilder: (BuildContext context, int index) {
                 final RoomEntity room = rooms[index];
                 final bool isMineLast = room.lastMessageSenderId == session.userId;

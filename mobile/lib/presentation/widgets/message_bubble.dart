@@ -15,9 +15,9 @@ class TickIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (status) {
       case DeliveryStatus.sending:
-        return Icon(Icons.schedule, size: 13, color: Colors.white.withOpacity(0.75));
+        return Icon(Icons.schedule, size: 13, color: Colors.white.withValues(alpha: 0.75));
       case DeliveryStatus.sent:
-        return Icon(Icons.done, size: 14, color: Colors.white.withOpacity(0.85));
+        return Icon(Icons.done, size: 14, color: Colors.white.withValues(alpha: 0.85));
       case DeliveryStatus.read:
         return const Icon(Icons.done_all, size: 14, color: Colors.cyanAccent);
       case DeliveryStatus.failed:
@@ -52,7 +52,7 @@ class MessageBubble extends StatelessWidget {
     final Color bubbleColor = isMine ? scheme.primary : scheme.surfaceContainerHighest;
     final Color textColor = isMine ? scheme.onPrimary : scheme.onSurface;
     final Color subtleTextColor =
-        isMine ? scheme.onPrimary.withOpacity(0.75) : scheme.onSurfaceVariant;
+        isMine ? scheme.onPrimary.withValues(alpha: 0.75) : scheme.onSurfaceVariant;
     final BorderRadius radius = BorderRadius.only(
       topLeft: const Radius.circular(18),
       topRight: const Radius.circular(18),
@@ -114,7 +114,7 @@ class MessageBubble extends StatelessWidget {
                   padding: const EdgeInsets.all(6),
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: (isMine ? Colors.white : scheme.primary).withOpacity(0.12),
+                    color: (isMine ? Colors.white : scheme.primary).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -209,12 +209,12 @@ class MessageBubble extends StatelessWidget {
                 height: 100,
                 color: Colors.black12,
                 alignment: Alignment.center,
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    const Icon(Icons.broken_image, size: 20),
-                    const SizedBox(width: 6),
-                    const Text('Imej tidak dapat dipaparkan', style: TextStyle(fontSize: 12)),
+                    Icon(Icons.broken_image, size: 20),
+                    SizedBox(width: 6),
+                    Text('Imej tidak dapat dipaparkan', style: TextStyle(fontSize: 12)),
                   ],
                 ),
               );
@@ -228,7 +228,7 @@ class MessageBubble extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: (isMine ? Colors.white : scheme.primary).withOpacity(0.12),
+          color: (isMine ? Colors.white : scheme.primary).withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -279,7 +279,7 @@ class MessageBubble extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: isMineReaction ? scheme.secondary.withOpacity(0.35) : Colors.black.withOpacity(0.12),
+          color: isMineReaction ? scheme.secondary.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isMineReaction ? scheme.secondary : Colors.transparent,
