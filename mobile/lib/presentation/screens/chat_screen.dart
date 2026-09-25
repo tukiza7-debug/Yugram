@@ -8,6 +8,8 @@ import '../../domain/entities/message_entity.dart';
 import '../../domain/entities/room_entity.dart';
 import '../../domain/repositories/chat_repository.dart';
 import '../bloc/chat/chat_bloc.dart';
+import '../bloc/chat/chat_event.dart';
+import '../bloc/chat/chat_state.dart';
 import '../widgets/media_viewer_dialog.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/reaction_picker_sheet.dart';

@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import 'message_entity.dart';
+import 'room_entity.dart';
 import 'user_entity.dart';
 
 /// Kelas event masa nyata yang dipaparkan oleh ChatRepository

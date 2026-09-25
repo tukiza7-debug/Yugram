@@ -128,6 +128,7 @@ class RoomModel extends RoomEntity {
     super.unreadCount,
     super.memberCount,
     super.createdBy,
+    super.createdAt,
   });
 
   /// JSON item daripada GET /api/rooms:
@@ -188,6 +189,9 @@ class RoomModel extends RoomEntity {
       unreadCount: int.tryParse(json['unreadCount']?.toString() ?? '') ?? 0,
       memberCount: members.length,
       createdBy: json['createdBy']?.toString(),
+      createdAt: json['createdAt'] == null
+          ? null
+          : DateTime.tryParse(json['createdAt'].toString()),
     );
   }
 

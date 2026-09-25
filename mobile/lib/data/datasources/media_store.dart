@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/error/app_exception.dart';
-import '../../core/utils/app_logger.dart';
 
 /// Penyimpan media tempatan (FASA 2): memuat turun fail dari pelayan
 /// (endpoint statik /uploads) ke direktori dokumen aplikasi.
@@ -36,7 +35,7 @@ class MediaStore {
       }
       final String safeBase =
           fileName.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_').replaceAll(RegExp(r'_+'), '_');
-      final String prefix = DateTime.now().millisecondsSinceEpoch;
+      final String prefix = DateTime.now().millisecondsSinceEpoch.toString();
       final File file = File('${mediaDir.path}/${prefix}_$safeBase');
       await file.writeAsBytes(response.bodyBytes);
       return file;

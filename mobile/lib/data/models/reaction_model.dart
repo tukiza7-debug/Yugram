@@ -1,4 +1,4 @@
-import '../../domain/entities/user_entity.dart';
+import '../../domain/entities/message_entity.dart';
 
 /// Model data bagi payload reaksi (dari JSONB `reactions` pelayan).
 class ReactionModel extends ReactionEntity {

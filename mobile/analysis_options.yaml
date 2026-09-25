@@ -6,6 +6,8 @@ analyzer:
     strict-inference: true
   errors:
     invalid_annotation_target: ignore
+  exclude:
+    - build/**
 
 linter:
   rules:

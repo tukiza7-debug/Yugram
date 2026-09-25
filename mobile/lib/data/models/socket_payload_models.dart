@@ -114,7 +114,7 @@ class RoomJoinedPayload extends Equatable {
   });
 
   final String roomId;
-  final List<UserModel> members;
+  final List<RoomMemberPayload> members;
   final List<MessageModel> messages;
 
   factory RoomJoinedPayload.fromJson(Map<String, dynamic> json) {
@@ -127,7 +127,6 @@ class RoomJoinedPayload extends Equatable {
       members: rawMembers
           .whereType<Map>()
           .map((Map raw) => RoomMemberPayload.fromJson(Map<String, dynamic>.from(raw)))
-          .map((RoomMemberPayload member) => member.toUserModel())
           .toList(),
       messages: rawMessages
           .whereType<Map>()

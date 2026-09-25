@@ -125,7 +125,7 @@ class MessageBubble extends StatelessWidget {
                   ),
                 ),
               if (message.hasMedia) ...<Widget>[
-                _buildMedia(context, scheme),
+                _buildMedia(context, scheme, textColor, subtleTextColor),
                 if (message.text.isNotEmpty) const SizedBox(height: 4),
               ],
               if (message.text.isNotEmpty)
@@ -178,7 +178,12 @@ class MessageBubble extends StatelessWidget {
   }
 
   /// Lampiran media: imej dipaparkan inline; video/pdf sebagai kad fail.
-  Widget _buildMedia(BuildContext context, ColorScheme scheme) {
+  Widget _buildMedia(
+    BuildContext context,
+    ColorScheme scheme,
+    Color textColor,
+    Color subtleTextColor,
+  ) {
     final MediaEntity media = message.media!;
     if (media.isImage) {
       return GestureDetector(
@@ -264,7 +269,7 @@ class MessageBubble extends StatelessWidget {
     for (final ReactionEntity reaction in message.reactions) {
       counts[reaction.emoji] = (counts[reaction.emoji] ?? 0) + 1;
     }
-    final String myEmoji = message.reactions
+    final String? myEmoji = message.reactions
         .where((ReactionEntity r) => r.userId == myUserId)
         .map((ReactionEntity r) => r.emoji)
         .fold<String?>(null, (String? acc, String e) => acc ?? e);

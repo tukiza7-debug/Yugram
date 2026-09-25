@@ -48,6 +48,7 @@ class RoomEntity extends Equatable {
     this.unreadCount = 0,
     this.memberCount = 0,
     this.createdBy,
+    this.createdAt,
   });
 
   final String id;
@@ -69,6 +70,9 @@ class RoomEntity extends Equatable {
 
   /// FASA 2: ID pencipta bilik (untuk keistimewaan admin).
   final String? createdBy;
+
+  /// FASA 2: tarikh bilik dicipta (dipaparkan pada skrin info kumpulan).
+  final DateTime? createdAt;
 
   bool get isGroup => type == 'group';
 
@@ -95,6 +99,7 @@ class RoomEntity extends Equatable {
         unreadCount,
         memberCount,
         createdBy,
+        createdAt,
       ];
 }
 

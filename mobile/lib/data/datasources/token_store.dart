@@ -55,8 +55,9 @@ class TokenStore {
 
   /// Simpan sesi daripada respons JSON pelayan.
   Future<void> saveFromServerResponse(Map<String, dynamic> body) async {
-    final Map<String, dynamic> user =
-        (body['user'] is Map<String, dynamic>) ? body['user'] : <String, dynamic>{};
+    final Map<String, dynamic> user = (body['user'] is Map<String, dynamic>)
+        ? body['user'] as Map<String, dynamic>
+        : <String, dynamic>{};
     final String token = body['token']?.toString() ?? '';
     final String userId = user['id']?.toString() ?? '';
     if (token.isEmpty || userId.isEmpty) {

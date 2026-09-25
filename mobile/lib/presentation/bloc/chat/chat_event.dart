@@ -1,11 +1,19 @@
 import 'package:equatable/equatable.dart';
 
 import '../../../core/network/socket_connection_state.dart';
+import '../../../domain/entities/message_entity.dart';
+import '../../../domain/entities/realtime_events.dart';
 
 /// ============ EVENT (arahan masuk ke ChatBloc) ============
 
+/// Kelas asas bagi SEMUA event ChatBloc supaya Bloc<ChatEvent, ChatState>
+/// mempunyai jenis acuan yang sah.
+abstract class ChatEvent extends Equatable {
+  const ChatEvent();
+}
+
 /// Permulaan skrin sembang: sertai bilik + langgan strim.
-class ChatStarted extends Equatable {
+class ChatStarted extends ChatEvent {
   const ChatStarted();
 
   @override
@@ -14,7 +22,7 @@ class ChatStarted extends Equatable {
 
 /// UI menghantar mesej (termasuk bendera senyap - Fitur 64, media FASA 2
 /// dan label terusan FASA 3).
-class MessageSubmitted extends Equatable {
+class MessageSubmitted extends ChatEvent {
   const MessageSubmitted({
     required this.text,
     required this.isSilent,
@@ -32,7 +40,7 @@ class MessageSubmitted extends Equatable {
 }
 
 /// Cuba semula mesej yang gagal dihantar.
-class MessageRetried extends Equatable {
+class MessageRetried extends ChatEvent {
   const MessageRetried({required this.messageId});
 
   final String messageId;
@@ -42,7 +50,7 @@ class MessageRetried extends Equatable {
 }
 
 /// Status menaip pengguna tempatan berubah.
-class TypingChanged extends Equatable {
+class TypingChanged extends ChatEvent {
   const TypingChanged({required this.isTyping});
 
   final bool isTyping;
@@ -52,7 +60,7 @@ class TypingChanged extends Equatable {
 }
 
 /// Toggle reaksi pantas pada mesej (Fitur 67).
-class ReactionToggled extends Equatable {
+class ReactionToggled extends ChatEvent {
   const ReactionToggled({required this.messageId, required this.emoji});
 
   final String messageId;
@@ -63,7 +71,7 @@ class ReactionToggled extends Equatable {
 }
 
 /// Tetap/batal mesej yang dibalas di composer.
-class ReplyTargetChanged extends Equatable {
+class ReplyTargetChanged extends ChatEvent {
   const ReplyTargetChanged({this.messageId});
 
   final String? messageId;
@@ -73,7 +81,7 @@ class ReplyTargetChanged extends Equatable {
 }
 
 /// Bersihkan mesej ralat pada skrin.
-class DismissError extends Equatable {
+class DismissError extends ChatEvent {
   const DismissError();
 
   @override
@@ -85,7 +93,7 @@ class DismissError extends Equatable {
 // ---------------------------------------------------------------------------
 
 /// Memulakan mod edit di composer untuk mesej sendiri.
-class MessageEditStarted extends Equatable {
+class MessageEditStarted extends ChatEvent {
   const MessageEditStarted({required this.messageId});
 
   final String messageId;
@@ -95,7 +103,7 @@ class MessageEditStarted extends Equatable {
 }
 
 /// Membatalkan mod edit.
-class MessageEditDismissed extends Equatable {
+class MessageEditDismissed extends ChatEvent {
   const MessageEditDismissed();
 
   @override
@@ -103,7 +111,7 @@ class MessageEditDismissed extends Equatable {
 }
 
 /// Menghantar hasil edit ke pelayan (REST).
-class MessageEditSubmitted extends Equatable {
+class MessageEditSubmitted extends ChatEvent {
   const MessageEditSubmitted({required this.messageId, required this.text});
 
   final String messageId;
@@ -114,7 +122,7 @@ class MessageEditSubmitted extends Equatable {
 }
 
 /// Memadam mesej (sendiri / admin).
-class MessageDeleteRequested extends Equatable {
+class MessageDeleteRequested extends ChatEvent {
   const MessageDeleteRequested({required this.messageId});
 
   final String messageId;
@@ -127,61 +135,61 @@ class MessageDeleteRequested extends Equatable {
 // Event DALAMAN (diterbitkan oleh langganan strim dalam ChatBloc).
 // ---------------------------------------------------------------------------
 
-class RoomHistoryLoaded extends Equatable {
+class RoomHistoryLoaded extends ChatEvent {
   const RoomHistoryLoaded({required this.event});
 
-  final dynamic event;
+  final RoomJoinedEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
 }
 
-class IncomingMessageReceived extends Equatable {
+class IncomingMessageReceived extends ChatEvent {
   const IncomingMessageReceived({required this.message});
 
-  final dynamic message;
+  final MessageEntity message;
 
   @override
   List<Object?> get props => <Object?>[message];
 }
 
-class MessageAckReceived extends Equatable {
+class MessageAckReceived extends ChatEvent {
   const MessageAckReceived({required this.event});
 
-  final dynamic event;
+  final MessageAckEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
 }
 
-class ReadReceiptReceived extends Equatable {
+class ReadReceiptReceived extends ChatEvent {
   const ReadReceiptReceived({required this.event});
 
-  final dynamic event;
+  final ReadReceiptEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
 }
 
-class TypingReceived extends Equatable {
+class TypingReceived extends ChatEvent {
   const TypingReceived({required this.event});
 
-  final dynamic event;
+  final TypingEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
 }
 
-class ReactionUpdatedReceived extends Equatable {
+class ReactionUpdatedReceived extends ChatEvent {
   const ReactionUpdatedReceived({required this.event});
 
-  final dynamic event;
+  final ReactionUpdateEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
 }
 
-class ConnectionStateChanged extends Equatable {
+class ConnectionStateChanged extends ChatEvent {
   const ConnectionStateChanged({required this.state});
 
   final SocketConnectionState state;
@@ -190,7 +198,7 @@ class ConnectionStateChanged extends Equatable {
   List<Object?> get props => <Object?>[state];
 }
 
-class SendFailed extends Equatable {
+class SendFailed extends ChatEvent {
   const SendFailed({required this.tempId, required this.reason});
 
   final String tempId;
@@ -200,7 +208,7 @@ class SendFailed extends Equatable {
   List<Object?> get props => <Object?>[tempId, reason];
 }
 
-class ErrorReceived extends Equatable {
+class ErrorReceived extends ChatEvent {
   const ErrorReceived({required this.message});
 
   final String message;
@@ -213,37 +221,37 @@ class ErrorReceived extends Equatable {
 // Event DALAMAN FASA 2 + 3
 // ---------------------------------------------------------------------------
 
-class MessageEditedReceived extends Equatable {
+class MessageEditedReceived extends ChatEvent {
   const MessageEditedReceived({required this.event});
 
-  final dynamic event;
+  final MessageEditedEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
 }
 
-class MessageDeletedReceived extends Equatable {
+class MessageDeletedReceived extends ChatEvent {
   const MessageDeletedReceived({required this.event});
 
-  final dynamic event;
+  final MessageDeletedEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
 }
 
-class RoomUpdatedReceived extends Equatable {
+class RoomUpdatedReceived extends ChatEvent {
   const RoomUpdatedReceived({required this.event});
 
-  final dynamic event;
+  final RoomUpdatedEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
 }
 
-class RoomDeletedReceived extends Equatable {
+class RoomDeletedReceived extends ChatEvent {
   const RoomDeletedReceived({required this.event});
 
-  final dynamic event;
+  final RoomDeletedEvent event;
 
   @override
   List<Object?> get props => <Object?>[event];
