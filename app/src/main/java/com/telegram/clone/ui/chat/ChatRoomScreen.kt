@@ -42,10 +42,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Forward
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
@@ -54,9 +61,15 @@ import androidx.compose.material.icons.filled.KeyboardVoice
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +77,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -98,6 +112,7 @@ import com.telegram.clone.data.model.MessageItem
 import com.telegram.clone.data.model.MessageStatus
 import com.telegram.clone.data.model.UserStatus
 import com.telegram.clone.ui.components.ChatRoomSkeleton
+import com.telegram.clone.ui.components.DownloadProgressPanel
 import com.telegram.clone.ui.components.FullscreenMediaViewer
 import com.telegram.clone.ui.components.MediaRequest
 import com.telegram.clone.ui.components.MediaViewerState
@@ -145,6 +160,14 @@ fun ChatRoomScreen(
     var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordFile by remember { mutableStateOf<java.io.File?>(null) }
     val context = LocalContext.current
+
+    // ---- Nekogram-style feature state ----
+    val selectedIds by viewModel.selectedMessageIds.collectAsState()
+    val isSelectionMode by viewModel.isSelectionMode.collectAsState()
+    var showForwardDialog by remember { mutableStateOf(false) }
+    var showConfirmSend by remember { mutableStateOf(false) }
+    var showDeleteSelectedConfirm by remember { mutableStateOf(false) }
+    var showDetailsFor by remember { mutableStateOf<MessageItem?>(null) }
 
     // File picker launcher for attachments
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -223,15 +246,46 @@ fun ChatRoomScreen(
                     androidx.compose.material3.SnackbarHost(hostState = snackbarHostState)
                 },
                 topBar = {
-                    ChatRoomTopBar(
-                        title = uiState.chatTitle,
-                        subtitle = viewModel.getUserStatusText(),
-                        userStatus = uiState.userProfile?.status,
-                        onBackClick = onBackClick,
-                        onCallClick = { onCallClick(uiState.chatTitle, false) },
-                        onVideoCallClick = { onCallClick(uiState.chatTitle, true) },
-                        onMoreClick = { showMoreMenu = true }
-                    )
+                    if (isSelectionMode) {
+                        SelectionTopBar(
+                            count = selectedIds.size,
+                            hasMedia = viewModel.selectionHasMedia(),
+                            onClose = { viewModel.clearSelection() },
+                            onSelectAll = { viewModel.selectAll() },
+                            onDownload = {
+                                val queued = viewModel.downloadSelectedMedia()
+                                viewModel.clearSelection()
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (queued > 0) "$queued media dimasukkan ke barisan muat turun"
+                                        else "Tiada media dalam pilihan"
+                                    )
+                                }
+                            },
+                            onForward = { showForwardDialog = true },
+                            onCopy = {
+                                viewModel.copySelectedText { copied ->
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            if (copied > 0) "$copied mesej disalin"
+                                            else "Tiada teks dalam pilihan"
+                                        )
+                                    }
+                                }
+                            },
+                            onDelete = { showDeleteSelectedConfirm = true }
+                        )
+                    } else {
+                        ChatRoomTopBar(
+                            title = uiState.chatTitle,
+                            subtitle = viewModel.getUserStatusText(),
+                            userStatus = uiState.userProfile?.status,
+                            onBackClick = onBackClick,
+                            onCallClick = { onCallClick(uiState.chatTitle, false) },
+                            onVideoCallClick = { onCallClick(uiState.chatTitle, true) },
+                            onMoreClick = { showMoreMenu = true }
+                        )
+                    }
                 },
                 bottomBar = {
                     if (isRecording) {
@@ -265,13 +319,17 @@ fun ChatRoomScreen(
                                 recordFile = null
                             }
                         )
-                    } else {
+                    } else if (!isSelectionMode) {
                         MessageInputBar(
                             text = inputText,
                             onTextChange = viewModel::onInputTextChanged,
                             onSendClick = {
-                                viewModel.sendMessage()
-                                keyboardController?.hide()
+                                if (viewModel.settingsConfirmSendEnabled()) {
+                                    showConfirmSend = true
+                                } else {
+                                    viewModel.sendMessage()
+                                    keyboardController?.hide()
+                                }
                             },
                             onAttachClick = { filePickerLauncher.launch("*/*") },
                             onVoiceClick = {
@@ -302,11 +360,17 @@ fun ChatRoomScreen(
                                     viewModel = viewModel,
                                     listState = listState,
                                     onLoadMore = viewModel::loadOlderMessages,
+                                    selectionMode = isSelectionMode,
+                                    selectedIds = selectedIds,
+                                    translations = uiState.translations,
+                                    translatingIds = uiState.translatingIds,
                                     onDoubleTapReaction = { messageId ->
                                         if (viewModel.settingsDoubleTapEnabled()) {
                                             viewModel.toggleReaction(messageId, "❤️")
                                         }
-                                    }
+                                    },
+                                    onToggleSelect = { viewModel.toggleSelection(it) },
+                                    onDetails = { showDetailsFor = it }
                                 )
                             }
                         }
@@ -320,6 +384,26 @@ fun ChatRoomScreen(
                 onDismissRequest = { showMoreMenu = false }
             ) {
                 val repository = remember { com.telegram.clone.data.repository.TelegramRepository.getInstance() }
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("Muat turun semua media") },
+                    onClick = {
+                        showMoreMenu = false
+                        scope.launch {
+                            val queued = viewModel.downloadAllMediaInChat()
+                            snackbarHostState.showSnackbar(
+                                if (queued > 0) "$queued media dimasukkan ke barisan muat turun"
+                                else "Tiada media dijumpai"
+                            )
+                        }
+                    }
+                )
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("Pilih mesej") },
+                    onClick = {
+                        showMoreMenu = false
+                        viewModel.startSelection()
+                    }
+                )
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text("Delete Chat", color = MaterialTheme.colorScheme.error) },
                     onClick = { showMoreMenu = false; showDeleteConfirm = true }
@@ -383,6 +467,86 @@ fun ChatRoomScreen(
                     }
                 )
             }
+
+            // ---- Nekogram-style: confirm before send ----
+            if (showConfirmSend) {
+                AlertDialog(
+                    onDismissRequest = { showConfirmSend = false },
+                    title = { Text("Hantar mesej?") },
+                    text = {
+                        Text(
+                            text = inputText.ifBlank { "(kosong)" },
+                            maxLines = 6,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showConfirmSend = false
+                            viewModel.sendMessage()
+                            keyboardController?.hide()
+                        }) { Text("Hantar", color = MaterialTheme.colorScheme.primary) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showConfirmSend = false }) { Text("Batal") }
+                    }
+                )
+            }
+
+            // ---- Nekogram-style: delete selected messages ----
+            if (showDeleteSelectedConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteSelectedConfirm = false },
+                    title = { Text("Padam ${selectedIds.size} mesej?") },
+                    text = { Text("Mesej akan dipadam untuk semua orang (jika dibenarkan).") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showDeleteSelectedConfirm = false
+                            viewModel.deleteSelected { ok ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(if (ok) "Mesej dipadam" else "Gagal memadam")
+                                }
+                            }
+                        }) { Text("Padam", color = MaterialTheme.colorScheme.error) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteSelectedConfirm = false }) { Text("Batal") }
+                    }
+                )
+            }
+
+            // ---- Nekogram-style: forward to another chat ----
+            if (showForwardDialog) {
+                ForwardDialog(
+                    onDismiss = { showForwardDialog = false },
+                    onForward = { targetChatId, sendCopy ->
+                        showForwardDialog = false
+                        viewModel.forwardSelected(targetChatId, sendCopy) { ok, error ->
+                            scope.launch {
+                                viewModel.clearSelection()
+                                snackbarHostState.showSnackbar(
+                                    if (ok) "Mesej dimajukan" else "Gagal memajukan: ${error ?: "ralat"}"
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+
+            // ---- Nekogram-style: message details dialog ----
+            showDetailsFor?.let { message ->
+                MessageDetailsDialog(
+                    message = message,
+                    typeLabel = viewModel.messageTypeLabel(message),
+                    onDismiss = { showDetailsFor = null }
+                )
+            }
+
+            // ---- Bulk download progress panel (floating) ----
+            DownloadProgressPanel(
+                manager = viewModel.downloadManager,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
 
             // Fullscreen photo / video viewer (tap a media bubble to open).
             MediaViewerState.request?.let { request ->
@@ -527,7 +691,13 @@ private fun MessagesList(
     viewModel: ChatRoomViewModel,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onLoadMore: () -> Unit,
-    onDoubleTapReaction: (Long) -> Unit
+    selectionMode: Boolean,
+    selectedIds: Set<Long>,
+    translations: Map<Long, String>,
+    translatingIds: Set<Long>,
+    onDoubleTapReaction: (Long) -> Unit,
+    onToggleSelect: (Long) -> Unit,
+    onDetails: (MessageItem) -> Unit
 ) {
     val groupedItems = viewModel.groupMessagesByDate(messages)
 
@@ -554,7 +724,20 @@ private fun MessagesList(
                         message = item,
                         formatTime = viewModel::formatMessageTime,
                         onRetry = viewModel::retryMessage,
-                        onDoubleTap = { onDoubleTapReaction(item.messageId) }
+                        onDoubleTap = { onDoubleTapReaction(item.messageId) },
+                        selectionMode = selectionMode,
+                        isSelected = item.messageId in selectedIds,
+                        onToggleSelect = { onToggleSelect(item.messageId) },
+                        translation = translations[item.messageId],
+                        isTranslating = item.messageId in translatingIds,
+                        onContextAction = { action ->
+                            when (action) {
+                                BubbleAction.SELECT -> onToggleSelect(item.messageId)
+                                BubbleAction.COPY -> viewModel.copySingleText(item)
+                                BubbleAction.TRANSLATE -> viewModel.translateMessage(item.messageId)
+                                BubbleAction.DETAILS -> onDetails(item)
+                            }
+                        }
                     )
                 }
                 is ChatRoomViewModel.DateSeparator -> {
@@ -571,6 +754,9 @@ private fun MessagesList(
         }
     }
 }
+
+/** Actions available from the long-press context menu on a message bubble. */
+private enum class BubbleAction { SELECT, COPY, TRANSLATE, DETAILS }
 
 @Composable
 private fun DateSeparatorBubble(date: String) {
@@ -601,7 +787,13 @@ private fun MessageBubble(
     message: MessageItem,
     formatTime: (Int) -> String,
     onRetry: (Long) -> Unit = {},
-    onDoubleTap: () -> Unit = {}
+    onDoubleTap: () -> Unit = {},
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onToggleSelect: () -> Unit = {},
+    translation: String? = null,
+    isTranslating: Boolean = false,
+    onContextAction: (BubbleAction) -> Unit = {}
 ) {
     val isOutgoing = message.isOutgoing
     val bubbleColor = if (isOutgoing) {
@@ -614,6 +806,8 @@ private fun MessageBubble(
     } else {
         ChatBubbleColors.incomingText()
     }
+
+    var showContextMenu by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -639,132 +833,226 @@ private fun MessageBubble(
             )
         }
 
-        Surface(
-            shape = bubbleShape,
-            color = bubbleColor,
-            modifier = Modifier
-                .padding(horizontal = 4.dp, vertical = 2.dp)
-                .then(
-                    if (isOutgoing) {
-                        Modifier.padding(start = 48.dp)
-                    } else {
-                        Modifier.padding(end = 48.dp)
-                    }
-                )
-                .combinedClickable(onClick = {}, onDoubleClick = onDoubleTap)
-        ) {
-            Column(
-                modifier = Modifier.padding(
-                    start = 10.dp,
-                    end = 8.dp,
-                    top = 6.dp,
-                    bottom = 4.dp
-                )
+        // Selection indicator (Nekogram-style check circle).
+        if (selectionMode) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterVertically)
+                    .padding(start = 4.dp, end = 2.dp)
             ) {
-                // Message content based on type
-                when (val content = message.content) {
-                    is MessageContent.Text -> {
-                        Text(
-                            text = content.text,
-                            style = TelegramTextStyles.chatMessage,
-                            color = textColor
-                        )
-                    }
-                    is MessageContent.Photo -> {
-                        PhotoMessageContent(
-                            content = content,
-                            captionColor = textColor
-                        )
-                    }
-                    is MessageContent.Video -> {
-                        VideoMessageContent(
-                            content = content,
-                            captionColor = textColor
-                        )
-                    }
-                    is MessageContent.Document -> {
-                        DocumentMessageContent(
-                            content = content,
-                            textColor = textColor
-                        )
-                    }
-                    is MessageContent.Audio -> {
-                        AudioMessageContent(
-                            content = content,
-                            textColor = textColor
-                        )
-                    }
-                    is MessageContent.Voice -> {
-                        VoiceMessageContent(
-                            content = content,
-                            textColor = textColor
-                        )
-                    }
-                    is MessageContent.Sticker -> {
-                        StickerMessageContent(content = content)
-                    }
-                    is MessageContent.Location -> {
-                        LocationMessageContent(
-                            content = content,
-                            textColor = textColor
-                        )
-                    }
-                    is MessageContent.Contact -> {
-                        ContactMessageContent(
-                            content = content,
-                            textColor = textColor
-                        )
-                    }
-                    is MessageContent.Poll -> {
-                        PollMessageContent(
-                            content = content,
-                            textColor = textColor
-                        )
-                    }
-                    is MessageContent.ChatAction -> {
-                        Text(
-                            text = content.actionDescription,
-                            style = TelegramTextStyles.chatMessage,
-                            color = textColor
-                        )
-                    }
-                    is MessageContent.Unsupported -> {
-                        Text(
-                            text = "[${content.typeName}]",
-                            style = TelegramTextStyles.chatMessage,
-                            color = textColor
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                    contentDescription = if (isSelected) "Dipilih" else "Pilih",
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
 
-                // Timestamp and delivery status row
-                Row(
-                    modifier = Modifier.align(Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (message.isEdited) {
-                        Text(
-                            text = "edited",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ChatBubbleColors.timestampText(),
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                    }
-
-                    Text(
-                        text = formatTime(message.date),
-                        style = TelegramTextStyles.chatMessageTime,
-                        color = ChatBubbleColors.timestampText()
+        Box {
+            Surface(
+                shape = bubbleShape,
+                color = if (isSelected) bubbleColor.copy(alpha = 0.82f) else bubbleColor,
+                modifier = Modifier
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .then(
+                        if (isOutgoing) {
+                            Modifier.padding(start = if (selectionMode) 0.dp else 48.dp)
+                        } else {
+                            Modifier.padding(end = if (selectionMode) 0.dp else 48.dp)
+                        }
                     )
+                    .combinedClickable(
+                        onClick = { if (selectionMode) onToggleSelect() },
+                        onDoubleClick = { if (!selectionMode) onDoubleTap() },
+                        onLongClick = { if (!selectionMode) showContextMenu = true }
+                    )
+            ) {
+                Column(
+                    modifier = Modifier.padding(
+                        start = 10.dp,
+                        end = 8.dp,
+                        top = 6.dp,
+                        bottom = 4.dp
+                    )
+                ) {
+                    // Message content based on type
+                    when (val content = message.content) {
+                        is MessageContent.Text -> {
+                            Text(
+                                text = content.text,
+                                style = TelegramTextStyles.chatMessage,
+                                color = textColor
+                            )
+                            // Nekogram-style inline translation.
+                            if (translation != null) {
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = translation,
+                                    style = TelegramTextStyles.chatMessage,
+                                    color = textColor.copy(alpha = 0.72f),
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                )
+                                Text(
+                                    text = "diterjemah",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.5f)
+                                )
+                            } else if (isTranslating) {
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = "menterjemah...",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                        is MessageContent.Photo -> {
+                            PhotoMessageContent(
+                                content = content,
+                                captionColor = textColor
+                            )
+                        }
+                        is MessageContent.Video -> {
+                            VideoMessageContent(
+                                content = content,
+                                captionColor = textColor
+                            )
+                        }
+                        is MessageContent.Document -> {
+                            DocumentMessageContent(
+                                content = content,
+                                textColor = textColor
+                            )
+                        }
+                        is MessageContent.Audio -> {
+                            AudioMessageContent(
+                                content = content,
+                                textColor = textColor
+                            )
+                        }
+                        is MessageContent.Voice -> {
+                            VoiceMessageContent(
+                                content = content,
+                                textColor = textColor
+                            )
+                        }
+                        is MessageContent.Sticker -> {
+                            StickerMessageContent(content = content)
+                        }
+                        is MessageContent.Location -> {
+                            LocationMessageContent(
+                                content = content,
+                                textColor = textColor
+                            )
+                        }
+                        is MessageContent.Contact -> {
+                            ContactMessageContent(
+                                content = content,
+                                textColor = textColor
+                            )
+                        }
+                        is MessageContent.Poll -> {
+                            PollMessageContent(
+                                content = content,
+                                textColor = textColor
+                            )
+                        }
+                        is MessageContent.ChatAction -> {
+                            Text(
+                                text = content.actionDescription,
+                                style = TelegramTextStyles.chatMessage,
+                                color = textColor
+                            )
+                        }
+                        is MessageContent.Unsupported -> {
+                            Text(
+                                text = "[${content.typeName}]",
+                                style = TelegramTextStyles.chatMessage,
+                                color = textColor
+                            )
+                        }
+                    }
 
-                    if (isOutgoing && message.status != null) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        MessageStatusIcon(
-                            status = message.status,
-                            onRetry = { onRetry(message.messageId) }
+                    // Timestamp and delivery status row
+                    Row(
+                        modifier = Modifier.align(Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (message.isEdited) {
+                            Text(
+                                text = "edited",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ChatBubbleColors.timestampText(),
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                        }
+
+                        Text(
+                            text = formatTime(message.date),
+                            style = TelegramTextStyles.chatMessageTime,
+                            color = ChatBubbleColors.timestampText()
                         )
+
+                        if (isOutgoing && message.status != null) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            MessageStatusIcon(
+                                status = message.status,
+                                onRetry = { onRetry(message.messageId) }
+                            )
+                        }
                     }
                 }
+            }
+
+            // Long-press context menu (Nekogram-style actions).
+            DropdownMenu(
+                expanded = showContextMenu,
+                onDismissRequest = { showContextMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Pilih") },
+                    leadingIcon = {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                    },
+                    onClick = {
+                        showContextMenu = false
+                        onContextAction(BubbleAction.SELECT)
+                    }
+                )
+                if (message.content is MessageContent.Text) {
+                    DropdownMenuItem(
+                        text = { Text("Salin teks") },
+                        leadingIcon = {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onContextAction(BubbleAction.COPY)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Terjemah") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onContextAction(BubbleAction.TRANSLATE)
+                        }
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Butiran mesej") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
+                    },
+                    onClick = {
+                        showContextMenu = false
+                        onContextAction(BubbleAction.DETAILS)
+                    }
+                )
             }
         }
     }
@@ -1520,5 +1808,263 @@ private fun RecordingBar(
                 }
             }
         }
+    }
+}
+
+// ================================================================
+// Nekogram-style: selection top bar
+// ================================================================
+
+/**
+ * Replaces the normal top bar while messages are selected, exposing the
+ * bulk actions: select-all, download (media only), forward, copy, delete.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectionTopBar(
+    count: Int,
+    hasMedia: Boolean,
+    onClose: () -> Unit,
+    onSelectAll: () -> Unit,
+    onDownload: () -> Unit,
+    onForward: () -> Unit,
+    onCopy: () -> Unit,
+    onDelete: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Text(
+                text = "$count dipilih",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onClose) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Tutup pilihan",
+                    tint = Color.White
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = onSelectAll) {
+                Icon(
+                    imageVector = Icons.Default.SelectAll,
+                    contentDescription = "Pilih semua",
+                    tint = Color.White
+                )
+            }
+            if (hasMedia) {
+                IconButton(onClick = onDownload) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Muat turun pilihan",
+                        tint = Color.White
+                    )
+                }
+            }
+            IconButton(onClick = onForward) {
+                Icon(
+                    imageVector = Icons.Default.Forward,
+                    contentDescription = "Majukan",
+                    tint = Color.White
+                )
+            }
+            IconButton(onClick = onCopy) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = "Salin",
+                    tint = Color.White
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Padam",
+                    tint = Color.White
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = TelegramBlue,
+            titleContentColor = Color.White
+        )
+    )
+}
+
+// ================================================================
+// Nekogram-style: forward dialog
+// ================================================================
+
+/**
+ * Pick a recent chat to forward the selection to, with the Nekogram
+ * "forward without sender name" (send copy) toggle.
+ */
+@Composable
+private fun ForwardDialog(
+    onDismiss: () -> Unit,
+    onForward: (targetChatId: Long, sendCopy: Boolean) -> Unit
+) {
+    val repository = remember {
+        com.telegram.clone.data.repository.TelegramRepository.getInstance()
+    }
+    val chats by repository.chatList.collectAsState(initial = emptyList())
+    var sendCopy by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Majukan kepada...") },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Tanpa nama pengirim",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = sendCopy,
+                        onCheckedChange = { sendCopy = it }
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                if (chats.isEmpty()) {
+                    Text(
+                        text = "Tiada chat terkini",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(280.dp)
+                    ) {
+                        items(chats.size) { index ->
+                            val chat = chats[index]
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { onForward(chat.chatId, sendCopy) }
+                                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                com.telegram.clone.ui.components.TdFileImage(
+                                    file = chat.avatarPhoto,
+                                    contentDescription = chat.title,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(TelegramBlue),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = chat.title.firstOrNull()?.uppercase() ?: "?",
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = chat.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
+}
+
+// ================================================================
+// Nekogram-style: message details dialog
+// ================================================================
+
+/** Shows message metadata (Nekogram "show message info"). */
+@Composable
+private fun MessageDetailsDialog(
+    message: MessageItem,
+    typeLabel: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Butiran mesej") },
+        text = {
+            Column {
+                DetailRow("Jenis", typeLabel)
+                DetailRow("ID mesej", message.messageId.toString())
+                DetailRow("ID chat", message.senderId.toString())
+                DetailRow("Pengirim", message.senderName.ifBlank { "Tidak diketahui" })
+                DetailRow(
+                    "Tarikh",
+                    java.text.SimpleDateFormat("dd MMM yyyy HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(message.date * 1000L))
+                )
+                if (message.isEdited) DetailRow("Status", "Diedit")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Tutup") }
+        }
+    )
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(96.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium
+        )
     }
 }

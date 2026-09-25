@@ -163,3 +163,58 @@ Catatan jujur: fitur premium Telegram yang ditegakkan di SERVER
 (unlock emoji premium, upload 4GB, badge server, dll.) tidak bisa
 dibuka dari sisi klien — yang kami berikan adalah fitur premium-
 style yang benar-benar berfungsi dan bonus unik di atas itu.
+
+==================================================================
+ PATCH: FITUR NEKOGRAM + MUAT TURUN PUKAL (all / selected / bulk)
+==================================================================
+
+---------------------------------------------------------------
+1. MUAT TURUN PUKAL MEDIA (download all / selected / bulk)
+---------------------------------------------------------------
+- core/download/MediaDownloadManager.kt (BARU): enjin muat turun pukal
+    * barisan (queue) dengan paralelisme terkawal 1-8 sambungan
+    * kemajuan langsung (progress) setiap fail + keseluruhan
+    * batal satu fail / semua; kosongkan selesai
+    * fail siap DISIMPAN AUTOMATIK ke galeri (Pictures/Yugram,
+      Movies/Yugram) melalui core/util/GallerySaver.kt (BARU)
+    * tetapan TDLib `connections_for_media_download` diselaraskan
+- ui/components/DownloadProgressPanel.kt (BARU): panel terapung
+    paparan kemajuan (boleh dikembang, batal per-fail)
+- ChatRoomScreen:
+    * menu (tiga titik) -> "Muat turun semua media" (SearchChatMessages
+      filter PhotoAndVideo + Document, hingga 700 fail)
+    * pemilihan mesej -> toolbar muat turun (hanya media terpilih)
+
+---------------------------------------------------------------
+2. FITUR NEKOGRAM YANG DITAMBAH
+---------------------------------------------------------------
+- Pemilihan mesej: tekan lama bubble -> menu konteks "Pilih";
+  toolbar pemilihan: Pilih Semua / Muat Turun / Maju / Salin / Padam
+- Terjemahan mesej (TDLib native TranslateText, tiada API luar):
+    * menu konteks "Terjemah" + auto-terjemah mesej masuk (toggle)
+    * bahasa sasaran boleh dipilih (ms, id, en, zh, ar, es, fr, ja,
+      ko, ru, th, vi) — cache per-mesej dalam sesi
+- Salin teks mesej (satu / pukal) ke papan keratan
+- Majukan mesej ke mana-mana chat terkini + toggle
+  "Tanpa nama pengirim" (sendCopy / hide quote, gaya Nekogram)
+- Sahkan sebelum hantar (toggle)
+- Hantar senyap (disableNotification) (toggle)
+- Butiran mesej (ID, jenis, tarikh, pengirim) melalui menu konteks
+- Padam mesej terpilih (revoke = padam untuk semua orang)
+- ui/settings/NekogramSettingsScreen.kt (BARU): layar tetapan
+  "Fitur Nekogram" dijana dari kad menu Settings ("Lainnya")
+
+---------------------------------------------------------------
+3. KEMAS KINIAN STRUKTUR
+---------------------------------------------------------------
+- AppSettingsManager: +6 tetapan neko_* (confirm/silent/translate/
+  lang/connections/forwardNoQuote)
+- TelegramRepository: +forwardMessages, translateText, deleteMessages,
+  searchChatMedia, setOptionInt, cancelDownloadFile,
+  sendTextMessageWithOptions
+- MediaViewer: delegasi simpan galeri ke GallerySaver (satu sumber)
+- ChatRoomViewModel: keadaan pemilihan, cache terjemahan, auto-terjemah,
+  tindakan pukal
+- Semua signature TDLib disahkan terhadap TdApi.java tdlibx 1.8.56
+- verify_nekogram.py: 65 semakan statik (baki brace, import, ikon,
+  TdApi, wiring, emoji) — SEMUA LULUS sebelum push

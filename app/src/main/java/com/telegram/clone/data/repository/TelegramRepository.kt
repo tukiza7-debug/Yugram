@@ -1192,4 +1192,158 @@ class TelegramRepository private constructor() {
     fun isChatMuted(chatId: Long): Boolean {
         return chatCache[chatId]?.notificationSettings?.muteFor?.let { it > 0 } ?: false
     }
+
+    // ============================================================
+    // Nekogram-inspired power features
+    // ============================================================
+
+    /**
+     * Forwards messages from one chat to another.
+     *
+     * @param sendCopy true = forward WITHOUT the original sender name
+     *                 ("send copy" / hide quote, Nekogram style);
+     *                 false = standard forward with quote header.
+     */
+    fun forwardMessages(
+        targetChatId: Long,
+        fromChatId: Long,
+        messageIds: LongArray,
+        sendCopy: Boolean,
+        onResult: (Boolean, String?) -> Unit = { _, _ -> }
+    ) {
+        if (messageIds.isEmpty()) {
+            onResult(false, "Tiada mesej dipilih")
+            return
+        }
+        tdLibClient.sendFunction(
+            TdApi.ForwardMessages(targetChatId, null, fromChatId, messageIds, null, sendCopy, false)
+        ) { result ->
+            coroutineScope.launch {
+                if (result.constructor == TdApi.Error.CONSTRUCTOR) {
+                    onResult(false, (result as TdApi.Error).message)
+                } else {
+                    onResult(true, null)
+                }
+            }
+        }
+    }
+
+    /**
+     * Translates plain text via TDLib's native [TdApi.TranslateText]
+     * (server-side translation, no third-party API).
+     *
+     * @return translated text, or null on error/timeout.
+     */
+    suspend fun translateText(text: String, toLanguageCode: String): String? {
+        if (text.isBlank()) return null
+        if (!tdLibClient.isInitialized()) return null
+        val deferred = CompletableDeferred<String?>()
+        tdLibClient.sendFunction(
+            TdApi.TranslateText(TdApi.FormattedText(text, emptyArray()), toLanguageCode)
+        ) { result ->
+            coroutineScope.launch {
+                deferred.complete(
+                    if (result.constructor == TdApi.FormattedText.CONSTRUCTOR) {
+                        (result as TdApi.FormattedText).text
+                    } else {
+                        null
+                    }
+                )
+            }
+        }
+        return withTimeoutOrNull(TDLIB_CALL_TIMEOUT_MS) { deferred.await() }
+    }
+
+    /**
+     * Deletes messages from a chat.
+     *
+     * @param revoke true = delete for everyone (when allowed).
+     */
+    fun deleteMessages(
+        chatId: Long,
+        messageIds: LongArray,
+        revoke: Boolean,
+        onResult: (Boolean) -> Unit = {}
+    ) {
+        if (messageIds.isEmpty()) {
+            onResult(true)
+            return
+        }
+        tdLibClient.sendFunction(
+            TdApi.DeleteMessages(chatId, messageIds, revoke)
+        ) { result ->
+            coroutineScope.launch {
+                onResult(result.constructor == TdApi.Ok.CONSTRUCTOR)
+            }
+        }
+    }
+
+    /**
+     * Searches a chat for media messages (Nekogram-style "download all media").
+     *
+     * @param filter e.g. [TdApi.SearchMessagesFilterPhotoAndVideo] or
+     *               [TdApi.SearchMessagesFilterDocument].
+     * @return the media messages found (newest first), empty on error.
+     */
+    suspend fun searchChatMedia(
+        chatId: Long,
+        filter: TdApi.SearchMessagesFilter,
+        limit: Int = 200
+    ): List<TdApi.Message> {
+        if (!tdLibClient.isInitialized()) return emptyList()
+        val deferred = CompletableDeferred<List<TdApi.Message>>()
+        tdLibClient.sendFunction(
+            TdApi.SearchChatMessages(chatId, null, null, null, 0, 0, limit, filter)
+        ) { result ->
+            coroutineScope.launch {
+                deferred.complete(
+                    if (result.constructor == TdApi.FoundChatMessages.CONSTRUCTOR) {
+                        (result as TdApi.FoundChatMessages).messages.toList()
+                    } else {
+                        emptyList()
+                    }
+                )
+            }
+        }
+        return withTimeoutOrNull(TDLIB_CALL_TIMEOUT_MS) { deferred.await() } ?: emptyList()
+    }
+
+    /**
+     * Sets an integer TDLib runtime option (e.g.
+     * `connections_for_media_download`). Failures are ignored — unknown
+     * options simply return an error that we swallow.
+     */
+    fun setOptionInt(name: String, value: Int) {
+        tdLibClient.sendFunction(TdApi.SetOption(name, TdApi.OptionValueInteger(value.toLong())))
+    }
+
+    /**
+     * Cancels an in-progress TDLib file download.
+     */
+    fun cancelDownloadFile(fileId: Int) {
+        if (fileId == 0) return
+        tdLibClient.sendFunction(TdApi.CancelDownloadFile(fileId, false))
+    }
+
+    /**
+     * Sends a text message with custom [TdApi.MessageSendOptions]
+     * (silent send via disableNotification).
+     */
+    fun sendTextMessageWithOptions(
+        chatId: Long,
+        text: String,
+        disableNotification: Boolean,
+        onResult: (TdApi.Object) -> Unit = {}
+    ) {
+        val options = TdApi.MessageSendOptions()
+        options.disableNotification = disableNotification
+        val inputText = TdApi.InputMessageText(
+            TdApi.FormattedText(text, emptyArray()),
+            null,
+            false
+        )
+        tdLibClient.sendMessage(chatId = chatId, options = options, inputMessageContent = inputText) { result ->
+            coroutineScope.launch { onResult(result) }
+        }
+    }
 }

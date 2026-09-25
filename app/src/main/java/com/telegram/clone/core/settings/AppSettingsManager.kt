@@ -52,6 +52,16 @@ class AppSettingsManager private constructor(context: Context) {
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_APP_LOCK_PIN_HASH = "app_lock_pin_hash"
 
+        // ============================================================
+        // Nekogram-inspired power features
+        // ============================================================
+        private const val KEY_NEKO_CONFIRM_SEND = "neko_confirm_send"
+        private const val KEY_NEKO_SILENT_SEND = "neko_silent_send"
+        private const val KEY_NEKO_AUTO_TRANSLATE = "neko_auto_translate"
+        private const val KEY_NEKO_TRANSLATE_LANG = "neko_translate_lang"
+        private const val KEY_NEKO_DOWNLOAD_CONNECTIONS = "neko_download_connections"
+        private const val KEY_NEKO_FORWARD_NO_QUOTE = "neko_forward_no_quote"
+
         @Volatile
         private var INSTANCE: AppSettingsManager? = null
 
@@ -207,6 +217,59 @@ class AppSettingsManager private constructor(context: Context) {
 
     fun setPremiumBadge(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_PREMIUM_BADGE, enabled).apply(); _premiumBadge.value = enabled
+    }
+
+    // ============================================================
+    // Nekogram-inspired power features
+    // ============================================================
+
+    /** Ask for confirmation before sending every message. */
+    private val _confirmSend = MutableStateFlow(prefs.getBoolean(KEY_NEKO_CONFIRM_SEND, false))
+    val confirmSend: StateFlow<Boolean> = _confirmSend.asStateFlow()
+
+    fun setConfirmSend(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NEKO_CONFIRM_SEND, enabled).apply(); _confirmSend.value = enabled
+    }
+
+    /** Send all outgoing messages with disableNotification (silent send). */
+    private val _silentSend = MutableStateFlow(prefs.getBoolean(KEY_NEKO_SILENT_SEND, false))
+    val silentSend: StateFlow<Boolean> = _silentSend.asStateFlow()
+
+    fun setSilentSend(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NEKO_SILENT_SEND, enabled).apply(); _silentSend.value = enabled
+    }
+
+    /** Automatically translate incoming text messages. */
+    private val _autoTranslate = MutableStateFlow(prefs.getBoolean(KEY_NEKO_AUTO_TRANSLATE, false))
+    val autoTranslate: StateFlow<Boolean> = _autoTranslate.asStateFlow()
+
+    fun setAutoTranslate(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NEKO_AUTO_TRANSLATE, enabled).apply(); _autoTranslate.value = enabled
+    }
+
+    /** Target language code for message translation ("ms", "id", "en", ...). */
+    private val _translateLang = MutableStateFlow(prefs.getString(KEY_NEKO_TRANSLATE_LANG, "ms") ?: "ms")
+    val translateLang: StateFlow<String> = _translateLang.asStateFlow()
+
+    fun setTranslateLang(lang: String) {
+        prefs.edit().putString(KEY_NEKO_TRANSLATE_LANG, lang).apply(); _translateLang.value = lang
+    }
+
+    /** Parallel TDLib download connections for the bulk media downloader (1-8). */
+    private val _downloadConnections = MutableStateFlow(prefs.getInt(KEY_NEKO_DOWNLOAD_CONNECTIONS, 3))
+    val downloadConnections: StateFlow<Int> = _downloadConnections.asStateFlow()
+
+    fun setDownloadConnections(count: Int) {
+        val v = count.coerceIn(1, 8)
+        prefs.edit().putInt(KEY_NEKO_DOWNLOAD_CONNECTIONS, v).apply(); _downloadConnections.value = v
+    }
+
+    /** Default forwarding behaviour: strip the original sender name (send copy). */
+    private val _forwardNoQuote = MutableStateFlow(prefs.getBoolean(KEY_NEKO_FORWARD_NO_QUOTE, false))
+    val forwardNoQuote: StateFlow<Boolean> = _forwardNoQuote.asStateFlow()
+
+    fun setForwardNoQuote(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NEKO_FORWARD_NO_QUOTE, enabled).apply(); _forwardNoQuote.value = enabled
     }
 
     // ============================================================

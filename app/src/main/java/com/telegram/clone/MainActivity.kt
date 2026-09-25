@@ -49,6 +49,7 @@ import com.telegram.clone.ui.settings.AppearanceSettingsScreen
 import com.telegram.clone.ui.settings.DataStorageSettingsScreen
 import com.telegram.clone.ui.settings.DevicesScreen
 import com.telegram.clone.ui.settings.LanguageSettingsScreen
+import com.telegram.clone.ui.settings.NekogramSettingsScreen
 import com.telegram.clone.ui.settings.NotificationsSettingsScreen
 import com.telegram.clone.ui.settings.PrivacySettingsScreen
 import com.telegram.clone.ui.settings.SettingsScreen
@@ -273,7 +274,14 @@ fun TelegramCloneApp() {
                                 }
                             }
                         }
-                    }
+                    },
+                    onNekogramClick = { navController.navigate(Screen.Nekogram.route) }
+                )
+            }
+
+            composable(Screen.Nekogram.route) {
+                NekogramSettingsScreen(
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
@@ -531,4 +539,6 @@ sealed class Screen(val route: String) {
     object Language : Screen("language")
 
     object About : Screen("about")
+
+    object Nekogram : Screen("nekogram_settings")
 }

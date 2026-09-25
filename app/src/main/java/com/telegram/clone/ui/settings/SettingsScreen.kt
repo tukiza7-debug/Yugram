@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
@@ -122,7 +123,8 @@ fun SettingsScreen(
     onLanguageClick: () -> Unit = {},
     onPremiumClick: () -> Unit = {},
     onAboutClick: () -> Unit = {},
-    onSavedMessagesClick: () -> Unit = {}
+    onSavedMessagesClick: () -> Unit = {},
+    onNekogramClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val repository = remember { TelegramRepository.getInstance() }
@@ -165,7 +167,7 @@ fun SettingsScreen(
     // Menu structure per the spec, filterable from the search pill.
     val sections = remember(onProfileClick, onNotificationsClick, onPrivacyClick,
         onDevicesClick, onDataStorageClick, onAppearanceClick, onLanguageClick,
-        onPremiumClick, onAboutClick, onSavedMessagesClick) {
+        onPremiumClick, onAboutClick, onSavedMessagesClick, onNekogramClick) {
         listOf(
             "Umum" to listOf(
                 MenuEntry(
@@ -220,6 +222,14 @@ fun SettingsScreen(
                 )
             ),
             "Lainnya" to listOf(
+                MenuEntry(
+                    icon = Icons.Default.Tune,
+                    chipBg = ChipPurpleBg,
+                    chipTint = ChipPurple,
+                    label = "Fitur Nekogram",
+                    sub = "Terjemah, muat turun pukal, hantar senyap",
+                    onClick = onNekogramClick
+                ),
                 MenuEntry(
                     icon = Icons.Default.WorkspacePremium,
                     chipBg = ChipAmberBg,
