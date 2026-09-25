@@ -1,10 +1,30 @@
 # Yugram
 
+<p align="center">
+  <img src="docs/logo/yugram-animasi.gif" alt="Logo Yugram" width="240">
+</p>
+
+<p align="center"><em>Kapal kertas dalam litar bergradasi — logo rasmi Yugram.</em></p>
+
 Aplikasi sembang gaya Telegram yang dibina sepenuhnya sendiri (self-hosted) — tanpa TDLib, tanpa server Telegram. **Semua fasa pembangunan telah SIAP dan diuji end-to-end dengan 135 semakan automatik (0 gagal).**
 
 <p align="center">
   <strong>Flutter / Dart</strong> &middot; <strong>BLoC</strong> &middot; <strong>Node.js</strong> &middot; <strong>Socket.io</strong> &middot; <strong>PostgreSQL</strong> &middot; <strong>JWT</strong>
 </p>
+
+---
+
+## Logo
+
+| Varian | Fail | Kegunaan |
+|--------|------|----------|
+| Beranimasi (SVG + CSS) | [`docs/logo/yugram-logo-animasi.svg`](docs/logo/yugram-logo-animasi.svg) | web / pratonton pelayar — gelung 4.2s: pop-in, litar terlukis, kapal terbang masuk, terapung + denyar |
+| Beranimasi (GIF) | [`docs/logo/yugram-animasi.gif`](docs/logo/yugram-animasi.gif) | README / mesej |
+| Statik (SVG) | [`docs/logo/yugram-logo.svg`](docs/logo/yugram-logo.svg) | ikon app, dokumen |
+| Lockup melintang | [`docs/logo/yugram-lockup.svg`](docs/logo/yugram-lockup.svg) | header / penjenamaan |
+| Ikon launcher | `mobile/assets/icon/` | APK (jana automatik di CI) |
+
+Dalam aplikasi, logo dihidupkan sebagai widget asli `AnimatedYugramLogo` (CustomPainter, tiada pergantungan luar): skrin splas memainkan intro penuh (pop-in → litar → kapal terbang masuk → percikan), kemudian terapung lembut dengan denyar cahaya; skrin log masuk memaparkan varian statik ringkas. Sumber penjana: `scripts/logo_gen.py` pada mesin pembangun.
 
 ---
 

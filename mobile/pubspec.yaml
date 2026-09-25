@@ -1,7 +1,7 @@
 name: yugram_chat
-description: Yugram FASA 1 - Klien sembang masa nyata (Flutter + BLoC + Socket.io). Sembang peribadi 1-ke-1, ticks hantar/baca, typing, reactions, silent messages.
+description: Yugram - Klien sembang masa nyata (Flutter + BLoC + Socket.io). Sembang peribadi + kumpulan, media, ticks hantar/baca, typing, reactions, silent messages.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -24,6 +24,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  # Logo launcher Yugram (dijana semasa CI - lihat .github/workflows/flutter-build.yml)
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  image_path: "assets/icon/yugram_icon_1024.png"
+  android: true
+  ios: false
+  remove_alpha_ios: false
+  adaptive_icon_background: "#1D63E0"
+  adaptive_icon_foreground: "assets/icon/yugram_icon_foreground_432.png"
+  adaptive_icon_monochrome: "assets/icon/yugram_icon_foreground_432.png"
 
 flutter:
   uses-material-design: true

@@ -19,6 +19,7 @@ import 'domain/repositories/user_repository.dart';
 import 'presentation/bloc/auth/auth_cubit.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/rooms_screen.dart';
+import 'presentation/widgets/animated_yugram_logo.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -134,11 +135,44 @@ class _AuthGate extends StatelessWidget {
         if (state is AuthUnauthenticated || state is AuthFailure) {
           return const LoginScreen();
         }
-        // AuthInitial / AuthLoadInProgress - skrin splas ringkas.
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
+        // AuthInitial / AuthLoadInProgress - skrin splas dengan logo beranimasi.
+        return const _SplashView();
       },
+    );
+  }
+}
+
+/// Skrin splas jenama: logo Yugram beranimasi sementara sesi dipulihkan.
+class _SplashView extends StatelessWidget {
+  const _SplashView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const AnimatedYugramLogo(size: 168),
+            const SizedBox(height: 20),
+            Text(
+              'Yugram',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Menyediakan sembang anda...',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

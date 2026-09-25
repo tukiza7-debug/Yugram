@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 512" width="1060" height="512" role="img" aria-label="Yugram">
+  <style>text { font-family: 'Noto Sans SC','DejaVu Sans',sans-serif; font-weight: 700; }</style>
+  <defs>
+    <linearGradient id="ygBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#41B7F6"/>
+      <stop offset="0.55" stop-color="#2B8BEA"/>
+      <stop offset="1" stop-color="#1D63E0"/>
+    </linearGradient>
+    <radialGradient id="ygHi" cx="0.34" cy="0.22" r="0.62">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.30"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ygGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#9FE0FF" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#9FE0FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="ygBlur" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <clipPath id="ygClip"><circle cx="256" cy="256" r="224"/></clipPath>
+  </defs>
+  <circle cx="256" cy="256" r="224" fill="url(#ygBg)"/>
+  <circle cx="256" cy="256" r="224" fill="url(#ygHi)"/>
+  <circle cx="262" cy="254" r="150" fill="url(#ygGlow)" opacity="0.55" filter="url(#ygBlur)"/>
+  <ellipse cx="266" cy="384" rx="112" ry="24" fill="#0B2A66" opacity="0.20" filter="url(#ygBlur)"/>
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#FFFFFF" stroke-opacity="0.88" stroke-width="9" stroke-linecap="round"/>
+  <g>
+    <line x1="114.0" y1="262.0" x2="84.0" y2="252.0" stroke="#FFFFFF" stroke-opacity="0.00" stroke-width="11" stroke-linecap="round"/>
+    <line x1="124.0" y1="308.0" x2="98.0" y2="318.0" stroke="#FFFFFF" stroke-opacity="0.00" stroke-width="11" stroke-linecap="round"/>
+  </g>
+  <g>
+    <polygon points="388.0,168.0 122.0,242.0 240.0,298.0" fill="#FFFFFF"/>
+    <polygon points="388.0,168.0 240.0,298.0 230.0,372.0" fill="#DCEBFF"/>
+    <polygon points="122.0,242.0 170.0,312.0 240.0,298.0" fill="#B3D9FF"/>
+  </g>
+  <text x="420" y="308" font-size="168" fill="#12264F" letter-spacing="2">Yugram</text>
+</svg>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../bloc/auth/auth_cubit.dart';
+import '../widgets/animated_yugram_logo.dart';
 
 /// Skrin log masuk + pendaftaran (mod ditogol).
 class LoginScreen extends StatefulWidget {
@@ -82,19 +83,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Container(
-                    width: 84,
-                    height: 84,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[Color(0xFF7B5FE8), Color(0xFF3FB6F5)],
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 40),
+                  const Center(
+                    child: AnimatedYugramLogo(size: 104, showSparks: false),
                   ),
                   const SizedBox(height: 16),
                   Text(

@@ -43,6 +43,12 @@ jobs:
         working-directory: mobile
         run: flutter pub get
 
+      # Logo launcher Yugram: jana mipmap + ikon adaptif daripada
+      # assets/icon/ (config dalam pubspec.yaml -> flutter_launcher_icons).
+      - name: Jana ikon launcher Yugram
+        working-directory: mobile
+        run: dart run flutter_launcher_icons
+
       - name: flutter analyze (laporan, tidak menyekat binaan)
         working-directory: mobile
         run: flutter analyze
