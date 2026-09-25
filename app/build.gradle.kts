@@ -146,6 +146,9 @@ dependencies {
     // Image loading (Coil) for avatars and media previews
     implementation("io.coil-kt:coil-compose:2.5.0")
 
+    // QR code generation (profile QR dialog) — pure-Java core, no extra permissions
+    implementation("com.google.zxing:core:3.5.2")
+
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
 

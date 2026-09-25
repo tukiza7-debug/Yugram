@@ -42,6 +42,10 @@ import com.telegram.clone.R
 import com.telegram.clone.core.settings.AppSettingsManager
 import com.telegram.clone.ui.theme.TelegramBlue
 import com.telegram.clone.ui.theme.TelegramCloneTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.sp
+import com.telegram.clone.ui.theme.ChipPurple
+import com.telegram.clone.ui.theme.ChipPurpleBg
 
 /**
  * Language settings screen with a selectable list of languages.
@@ -54,18 +58,18 @@ fun LanguageSettingsScreen(onBackClick: () -> Unit) {
     val currentLang by mgr.language.collectAsState()
 
     val languages = listOf(
-        "English" to "🇬🇧",
-        "Indonesian" to "🇮🇩",
-        "Spanish" to "🇪🇸",
-        "French" to "🇫🇷",
-        "German" to "🇩🇪",
-        "Portuguese" to "🇵🇹",
-        "Russian" to "🇷🇺",
-        "Arabic" to "🇸🇦",
-        "Chinese" to "🇨🇳",
-        "Japanese" to "🇯🇵",
-        "Korean" to "🇰🇷",
-        "Malay" to "🇲🇾"
+        "English" to "EN",
+        "Indonesian" to "ID",
+        "Spanish" to "ES",
+        "French" to "FR",
+        "German" to "DE",
+        "Portuguese" to "PT",
+        "Russian" to "RU",
+        "Arabic" to "AR",
+        "Chinese" to "ZH",
+        "Japanese" to "JA",
+        "Korean" to "KO",
+        "Malay" to "MS"
     )
 
     TelegramCloneTheme {
@@ -93,7 +97,21 @@ fun LanguageSettingsScreen(onBackClick: () -> Unit) {
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(flag, style = MaterialTheme.typography.titleLarge)
+                                Box(
+                                    modifier = Modifier
+                                        .width(44.dp)
+                                        .height(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(ChipPurpleBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        flag,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = ChipPurple
+                                    )
+                                }
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Text(
                                     name,

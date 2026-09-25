@@ -52,6 +52,7 @@ import com.telegram.clone.R
 import com.telegram.clone.core.settings.AppSettingsManager
 import com.telegram.clone.ui.theme.TelegramBlue
 import com.telegram.clone.ui.theme.TelegramCloneTheme
+import androidx.compose.material.icons.filled.Check
 
 /**
  * Privacy & Security settings screen.
@@ -140,7 +141,12 @@ fun PrivacySettingsScreen(onBackClick: () -> Unit) {
                                         .background(if (option == current) TelegramBlue else Color.Transparent.copy(alpha = 0f)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (option == current) Text("✓", color = Color.White, fontSize = 12.sp)
+                                    if (option == current) Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(option, color = MaterialTheme.colorScheme.onSurface)

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,10 +22,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
@@ -65,16 +68,18 @@ import com.telegram.clone.data.model.ChatItem
 import com.telegram.clone.data.model.ChatType
 import com.telegram.clone.data.model.MessageStatus
 import com.telegram.clone.ui.components.ChatListSkeleton
-import com.telegram.clone.ui.components.GlassSearchBar
+import com.telegram.clone.ui.components.LightSearchBar
 import com.telegram.clone.ui.components.NovaFab
 import com.telegram.clone.ui.components.TdFileImage
+import com.telegram.clone.ui.theme.CardBg
 import com.telegram.clone.ui.theme.GlassBorderSoft
-import com.telegram.clone.ui.theme.GlassFill
+import com.telegram.clone.ui.theme.Hairline
+import com.telegram.clone.ui.theme.Ink
+import com.telegram.clone.ui.theme.MutedGray
 import com.telegram.clone.ui.theme.NovaGradientEnd
 import com.telegram.clone.ui.theme.NovaGradientStart
 import com.telegram.clone.ui.theme.NovaPinkRed
 import com.telegram.clone.ui.theme.NovaPurple
-import com.telegram.clone.ui.theme.StatusOnline
 import com.telegram.clone.ui.theme.TelegramCloneTheme
 import com.telegram.clone.ui.theme.TelegramTextStyles
 import com.telegram.clone.ui.theme.TextSecondaryDark
@@ -115,30 +120,25 @@ fun ChatListScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // ---------- Gradient header ----------
+                // ---------- Gradient header + floating white search ----------
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            brush = Brush.horizontalGradient(
+                            brush = Brush.linearGradient(
                                 listOf(NovaGradientStart, NovaGradientEnd)
                             ),
-                            shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
+                            shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                         )
                         .statusBarsPadding()
-                        .padding(horizontal = 8.dp, vertical = 10.dp)
+                        .padding(horizontal = 8.dp, top = 10.dp, bottom = 62.dp)
                 ) {
                     Text(
                         text = "Yugram",
                         color = Color.White,
                         fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
-                        style = androidx.compose.ui.text.TextStyle(
-                            shadow = androidx.compose.ui.graphics.Shadow(
-                                color = Color.White.copy(alpha = 0.6f),
-                                blurRadius = 20f
-                            )
-                        ),
+                        letterSpacing = (-0.3).sp,
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .padding(start = 12.dp)
@@ -174,13 +174,17 @@ fun ChatListScreen(
                     }
                 }
 
-                // ---------- Floating glass search bar ----------
+                // ---------- Floating white search pill overlapping the header ----------
                 if (showSearch) {
-                    GlassSearchBar(
+                    LightSearchBar(
                         value = uiState.searchQuery,
                         onValueChange = viewModel::onSearchQueryChanged,
-                        placeholder = stringResource(R.string.search_placeholder)
+                        placeholder = "Cari kontak, chat, atau pesan",
+                        modifier = Modifier
+                            .padding(horizontal = 20.dp)
+                            .offset(y = (-24).dp)
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
 
                 // ---------- Connection status ----------
@@ -305,9 +309,11 @@ private fun EmptyState() {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(32.dp)
         ) {
-            Text(
-                text = "📭",
-                fontSize = 48.sp
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Chat,
+                contentDescription = "No chats",
+                tint = MutedGray,
+                modifier = Modifier.size(56.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -356,12 +362,12 @@ private fun ChatListItem(
 ) {
     val hasUnread = chat.unreadCount > 0 || chat.isMarkedAsUnread
 
-    // Glass card with a soft glowing purple accent for unread chats
+    // Light card with a soft purple accent for unread chats
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(GlassFill)
+            .background(CardBg)
             .border(
                 1.dp,
                 if (hasUnread) NovaPurple.copy(alpha = 0.35f) else GlassBorderSoft,
@@ -415,7 +421,7 @@ private fun ChatListItem(
                         } else {
                             TelegramTextStyles.chatTitle
                         },
-                        color = Color.White,
+                        color = Ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -428,7 +434,7 @@ private fun ChatListItem(
                             modifier = Modifier
                                 .size(13.dp)
                                 .padding(end = 4.dp),
-                            tint = Color.White.copy(alpha = 0.4f)
+                            tint = MutedGray
                         )
                     }
                     if (chat.isMuted) {
@@ -438,7 +444,7 @@ private fun ChatListItem(
                             modifier = Modifier
                                 .size(13.dp)
                                 .padding(end = 4.dp),
-                            tint = Color.White.copy(alpha = 0.4f)
+                            tint = MutedGray
                         )
                     }
 
@@ -448,7 +454,7 @@ private fun ChatListItem(
                         color = if (hasUnread && !chat.isMuted) {
                             NovaPurple
                         } else {
-                            Color.White.copy(alpha = 0.45f)
+                            MutedGray
                         }
                     )
                 }
@@ -466,7 +472,7 @@ private fun ChatListItem(
                     }
 
                     Text(
-                        text = chat.draftMessage?.let { "✏️ Draft: $it" }
+                        text = chat.draftMessage?.let { "Draft: $it" }
                             ?: buildString {
                                 if (chat.senderName != null && !chat.isOutgoing &&
                                     (chat.chatType == ChatType.BASIC_GROUP || chat.chatType == ChatType.SUPERGROUP)
@@ -482,11 +488,11 @@ private fun ChatListItem(
                             TelegramTextStyles.chatLastMessage
                         },
                         color = if (chat.draftMessage != null) {
-                            StatusOnline
+                            NovaPurple
                         } else if (hasUnread && !chat.isMuted) {
-                            Color.White.copy(alpha = 0.85f)
+                            Ink.copy(alpha = 0.85f)
                         } else {
-                            Color.White.copy(alpha = 0.5f)
+                            MutedGray
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -520,7 +526,7 @@ private fun ChatAvatar(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(CircleShape)
             .background(avatarColor),
         contentAlignment = Alignment.Center
     ) {
@@ -567,7 +573,7 @@ private fun MessageDeliveryIcon(
                 imageVector = Icons.Default.Schedule,
                 contentDescription = null,
                 modifier = modifier.size(13.dp),
-                tint = Color.White.copy(alpha = 0.5f)
+                tint = MutedGray
             )
         }
         MessageStatus.Failed -> {
@@ -591,7 +597,7 @@ private fun MessageDeliveryIcon(
                 imageVector = Icons.Default.DoneAll,
                 contentDescription = null,
                 modifier = modifier.size(14.dp),
-                tint = Color.White.copy(alpha = 0.45f)
+                tint = MutedGray
             )
         }
         MessageStatus.Sent -> {
@@ -599,7 +605,7 @@ private fun MessageDeliveryIcon(
                 imageVector = Icons.Default.Check,
                 contentDescription = null,
                 modifier = modifier.size(14.dp),
-                tint = Color.White.copy(alpha = 0.45f)
+                tint = MutedGray
             )
         }
         null -> {

@@ -263,7 +263,17 @@ fun TelegramCloneApp() {
                     onDataStorageClick = { navController.navigate(Screen.DataStorage.route) },
                     onLanguageClick = { navController.navigate(Screen.Language.route) },
                     onPremiumClick = { navController.navigate(Screen.Premium.route) },
-                    onAboutClick = { navController.navigate(Screen.About.route) }
+                    onAboutClick = { navController.navigate(Screen.About.route) },
+                    onSavedMessagesClick = {
+                        val selfId = repository.currentUser.value?.id
+                        if (selfId != null) {
+                            repository.openPrivateChat(selfId) { chatId ->
+                                chatId?.let {
+                                    navController.navigate(Screen.ChatRoom.createRoute(it))
+                                }
+                            }
+                        }
+                    }
                 )
             }
 

@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,8 +42,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.KeyboardVoice
 import androidx.compose.material.icons.filled.Mic
@@ -92,6 +97,9 @@ import com.telegram.clone.data.model.MessageItem
 import com.telegram.clone.data.model.MessageStatus
 import com.telegram.clone.data.model.UserStatus
 import com.telegram.clone.ui.components.ChatRoomSkeleton
+import com.telegram.clone.ui.components.FullscreenMediaViewer
+import com.telegram.clone.ui.components.MediaRequest
+import com.telegram.clone.ui.components.MediaViewerState
 import com.telegram.clone.ui.theme.ChatBubbleColors
 import com.telegram.clone.ui.theme.DeliveryStatusRead
 import com.telegram.clone.ui.theme.DeliveryStatusSent
@@ -374,6 +382,14 @@ fun ChatRoomScreen(
                     }
                 )
             }
+
+            // Fullscreen photo / video viewer (tap a media bubble to open).
+            MediaViewerState.request?.let { request ->
+                FullscreenMediaViewer(
+                    request = request,
+                    onDismiss = { MediaViewerState.request = null }
+                )
+            }
         }
     }
 }
@@ -479,9 +495,11 @@ private fun EmptyChatState() {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(32.dp)
         ) {
-            Text(
-                text = "💬",
-                fontSize = 48.sp
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Chat,
+                contentDescription = "No messages",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(56.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -754,11 +772,11 @@ private fun MessageBubble(
 /**
  * Renders the 5-state message status icon inside an outgoing bubble:
  *
- * - Pending   🕐  → Schedule (clock)
- * - Sent      ✓   → Check (single tick, gray)
- * - Delivered ✓✓  → DoneAll (double tick, gray)
- * - Read      ✓✓  → DoneAll (double tick, blue)
- * - Failed    ⚠️  → ErrorOutline (tappable, triggers retry)
+ * - Pending   clock icon (Schedule)
+ * - Sent      tick (Check, gray)
+ * - Delivered double tick (DoneAll, gray)
+ * - Read      double tick (DoneAll, blue)
+ * - Failed    warning (ErrorOutline, tap to retry)
  */
 @Composable
 private fun MessageStatusIcon(
@@ -823,7 +841,17 @@ private fun PhotoMessageContent(
         com.telegram.clone.ui.components.TdFileImage(
             file = content.file,
             contentDescription = "Photo",
-            modifier = Modifier.size(width = 240.dp, height = 180.dp).clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier
+                .size(width = 240.dp, height = 180.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                    MediaViewerState.request = MediaRequest(
+                        displayFile = content.file,
+                        saveFile = content.file,
+                        isVideo = false,
+                        fileName = content.file?.remote?.uniqueId?.let { "IMG_$it.jpg" } ?: "Yugram.jpg"
+                    )
+                },
             contentScale = ContentScale.Crop,
             priority = 16,
             placeholder = {
@@ -856,7 +884,15 @@ private fun VideoMessageContent(
             modifier = Modifier
                 .size(width = 240.dp, height = 135.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable {
+                    MediaViewerState.request = MediaRequest(
+                        displayFile = content.thumbnail,
+                        saveFile = content.video?.video,
+                        isVideo = true,
+                        fileName = content.video?.fileName ?: "Yugram.mp4"
+                    )
+                },
             contentAlignment = Alignment.Center
         ) {
             com.telegram.clone.ui.components.TdFileImage(
@@ -875,7 +911,12 @@ private fun VideoMessageContent(
                     .background(Color.Black.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "▶", color = Color.White, fontSize = 20.sp)
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Play",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
 
@@ -906,7 +947,12 @@ private fun DocumentMessageContent(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = "📄", fontSize = 20.sp)
+            Icon(
+                imageVector = Icons.Default.Description,
+                contentDescription = "Document",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column {
@@ -950,7 +996,12 @@ private fun AudioMessageContent(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = "🎵", fontSize = 20.sp)
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = "Audio",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.width(180.dp)) {
@@ -1010,7 +1061,12 @@ private fun VoiceMessageContent(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = "▶", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = "Play",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
         }
         Spacer(modifier = Modifier.width(8.dp))
         // Waveform visualization
@@ -1066,7 +1122,12 @@ private fun LocationMessageContent(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "📍", fontSize = 32.sp)
+                Icon(
+                    imageVector = Icons.Default.Place,
+                    contentDescription = "Location",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
                 Text(
                     text = "Location",
                     style = MaterialTheme.typography.labelMedium,
@@ -1434,7 +1495,7 @@ private fun RecordingBar(
 
             // Slide to cancel hint
             Text(
-                text = "Slide to cancel ←",
+                text = "Slide to cancel",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)

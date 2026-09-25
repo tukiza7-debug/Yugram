@@ -152,7 +152,12 @@ fun ContactsScreen(
                             filteredContacts.isEmpty() -> {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("👤", fontSize = 48.sp)
+                                        Icon(
+                                            imageVector = Icons.Default.Contacts,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(48.dp)
+                                        )
                                         Spacer(modifier = Modifier.height(16.dp))
                                         Text(if (searchQuery.isBlank()) "No contacts found" else "No matching contacts", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }

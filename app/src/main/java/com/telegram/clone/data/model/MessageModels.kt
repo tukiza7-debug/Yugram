@@ -44,11 +44,11 @@ enum class ChatType {
  * Delivery / read status of an outgoing message, represented as a sealed class
  * with 5 distinct states mirroring Telegram's tick-mark progression.
  *
- * Pending  🕐  — message is being sent (clock icon)
- * Sent     ✓   — message reached the Telegram server (single check)
- * Delivered ✓✓ — message delivered to the recipient's device (double check, gray)
- * Read      ✓✓ — message read by the recipient (double check, blue)
- * Failed    ⚠️  — message could not be sent (warning icon, shows retry button)
+ * Pending     — message is being sent (clock icon)
+ * Sent       — message reached the Telegram server (single check)
+ * Delivered  — message delivered to the recipient's device (double check, gray)
+ * Read       — message read by the recipient (double check, blue)
+ * Failed     — message could not be sent (warning icon, shows retry button)
  */
 sealed class MessageStatus {
     /** Message is being sent — clock icon. */
@@ -320,44 +320,44 @@ object TdLibModelConverter {
             TdApi.MessagePhoto.CONSTRUCTOR -> {
                 val photoContent = content as TdApi.MessagePhoto
                 if (photoContent.caption.text.isNotBlank()) {
-                    "📷 ${photoContent.caption.text}"
+                    "${photoContent.caption.text}"
                 } else {
-                    "📷 Photo"
+                    "Photo"
                 }
             }
             TdApi.MessageVideo.CONSTRUCTOR -> {
                 val videoContent = content as TdApi.MessageVideo
                 if (videoContent.caption.text.isNotBlank()) {
-                    "🎬 ${videoContent.caption.text}"
+                    "${videoContent.caption.text}"
                 } else {
-                    "🎬 Video"
+                    "Video"
                 }
             }
             TdApi.MessageDocument.CONSTRUCTOR -> {
                 val docContent = content as TdApi.MessageDocument
-                "📄 ${docContent.document.fileName}"
+                "${docContent.document.fileName}"
             }
             TdApi.MessageAudio.CONSTRUCTOR -> {
                 val audioContent = content as TdApi.MessageAudio
-                "🎵 ${audioContent.audio.title ?: "Audio"}"
+                "${audioContent.audio.title ?: "Audio"}"
             }
             TdApi.MessageVoiceNote.CONSTRUCTOR -> {
-                "🎤 Voice message"
+                "Voice message"
             }
             TdApi.MessageSticker.CONSTRUCTOR -> {
                 val stickerContent = content as TdApi.MessageSticker
                 "${stickerContent.sticker.emoji} Sticker"
             }
             TdApi.MessageLocation.CONSTRUCTOR -> {
-                "📍 Location"
+                "Location"
             }
             TdApi.MessageContact.CONSTRUCTOR -> {
                 val contactContent = content as TdApi.MessageContact
-                "👤 ${contactContent.contact.firstName} ${contactContent.contact.lastName}"
+                "${contactContent.contact.firstName} ${contactContent.contact.lastName}"
             }
             TdApi.MessagePoll.CONSTRUCTOR -> {
                 val pollContent = content as TdApi.MessagePoll
-                "📊 ${pollContent.poll.question}"
+                "${pollContent.poll.question}"
             }
             TdApi.MessageChatAddMembers.CONSTRUCTOR -> {
                 "joined the group"
@@ -381,7 +381,7 @@ object TdLibModelConverter {
                 "removed the group photo"
             }
             TdApi.MessagePinMessage.CONSTRUCTOR -> {
-                "📌 pinned a message"
+                "pinned a message"
             }
             TdApi.MessageAnimatedEmoji.CONSTRUCTOR -> {
                 (content as TdApi.MessageAnimatedEmoji).emoji

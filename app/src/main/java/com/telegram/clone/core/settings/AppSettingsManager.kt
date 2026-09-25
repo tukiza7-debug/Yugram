@@ -72,7 +72,7 @@ class AppSettingsManager private constructor(context: Context) {
     // ============================================================
 
     private val _themeMode = MutableStateFlow(
-        enumFromName(prefs.getString(KEY_THEME_MODE, null), ThemeMode.SYSTEM)
+        enumFromName(prefs.getString(KEY_THEME_MODE, null), ThemeMode.LIGHT)
     )
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 

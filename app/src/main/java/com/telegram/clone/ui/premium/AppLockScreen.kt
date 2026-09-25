@@ -41,12 +41,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.telegram.clone.ui.components.novaGradientBrush
 import com.telegram.clone.ui.theme.GlassBorder
-import com.telegram.clone.ui.theme.GlassFillStrong
 import com.telegram.clone.ui.theme.NovaCyan
 import com.telegram.clone.ui.theme.NovaGradientEnd
 import com.telegram.clone.ui.theme.NovaGradientStart
 import com.telegram.clone.ui.theme.NovaPurple
 import com.telegram.clone.ui.theme.TextSecondaryDark
+import com.telegram.clone.ui.theme.CardBg
+import com.telegram.clone.ui.theme.Hairline
+import com.telegram.clone.ui.theme.Ink
+import com.telegram.clone.ui.theme.MutedGray
 
 /**
  * Full-screen PIN gate shown when App Lock is enabled. Dark glass design
@@ -113,8 +116,8 @@ fun AppLockScreen(
                 modifier = Modifier
                     .size(64.dp)
                     .clip(CircleShape)
-                    .background(GlassFillStrong)
-                    .border(1.dp, GlassBorder, CircleShape),
+                    .background(CardBg)
+                    .border(1.dp, Hairline, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -128,14 +131,14 @@ fun AppLockScreen(
             Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "Yugram",
-                color = Color.White,
+                color = Ink,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = if (errorState) "Wrong PIN — try again" else "Enter your PIN",
-                color = if (errorState) Color(0xFFFF5E7A) else TextSecondaryDark,
+                color = if (errorState) Color(0xFFFF5E7A) else MutedGray,
                 fontSize = 14.sp
             )
 
@@ -152,7 +155,7 @@ fun AppLockScreen(
                             .background(
                                 when {
                                     filled -> NovaPurple
-                                    else -> Color.White.copy(alpha = 0.15f)
+                                    else -> NovaPurple.copy(alpha = 0.25f)
                                 }
                             )
                             .border(1.dp, GlassBorder, CircleShape)
@@ -186,7 +189,7 @@ fun AppLockScreen(
                 listOf('1', '2', '3'),
                 listOf('4', '5', '6'),
                 listOf('7', '8', '9'),
-                listOf(' ', '0', '⌫')
+                listOf(' ', '0', 'D')
             )
             rows.forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
@@ -198,27 +201,27 @@ fun AppLockScreen(
                                 modifier = Modifier
                                     .size(72.dp)
                                     .clip(RoundedCornerShape(24.dp))
-                                    .background(GlassFillStrong)
-                                    .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
+                                    .background(CardBg)
+                                    .border(1.dp, Hairline, RoundedCornerShape(24.dp))
                                     .clickable {
                                         when (key) {
-                                            '⌫' -> { pin = pin.dropLast(1); errorState = false }
+                                            'D' -> { pin = pin.dropLast(1); errorState = false }
                                             else -> onDigit(key)
                                         }
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (key == '⌫') {
+                                if (key == 'D') {
                                     Icon(
                                         imageVector = Icons.Default.Backspace,
                                         contentDescription = "Delete",
-                                        tint = Color.White.copy(alpha = 0.8f),
+                                        tint = MutedGray,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 } else {
                                     Text(
                                         text = key.toString(),
-                                        color = Color.White,
+                                        color = Ink,
                                         fontSize = 24.sp,
                                         fontWeight = FontWeight.Medium
                                     )

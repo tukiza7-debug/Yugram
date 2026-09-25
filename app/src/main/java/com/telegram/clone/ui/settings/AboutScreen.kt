@@ -44,6 +44,7 @@ import com.telegram.clone.R
 import com.telegram.clone.data.repository.TelegramRepository
 import com.telegram.clone.ui.theme.TelegramBlue
 import com.telegram.clone.ui.theme.TelegramCloneTheme
+import androidx.compose.material.icons.filled.Send
 
 /**
  * About screen showing app version, TDLib version, and build info.
@@ -83,7 +84,12 @@ fun AboutScreen(onBackClick: () -> Unit) {
                     modifier = Modifier.size(96.dp).clip(CircleShape).background(TelegramBlue),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("✈", color = Color.White, fontSize = 48.sp)
+                    Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(44.dp)
+                )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

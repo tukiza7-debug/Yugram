@@ -72,8 +72,8 @@ object TelegramConfig {
     val configurationStatusMessage: String
         get() = buildString {
             appendLine("Telegram API Configuration Status:")
-            appendLine("API_ID: ${if (API_ID > 0) "✓ Configured ($API_ID)" else "✗ Missing or invalid"}")
-            appendLine("API_HASH: ${if (API_HASH.isNotBlank() && API_HASH != "null") "✓ Configured (${API_HASH.take(4)}...${API_HASH.takeLast(4)})" else "✗ Missing or invalid"}")
+            appendLine("API_ID: ${if (API_ID > 0) "Configured ($API_ID)" else "Missing or invalid"}")
+            appendLine("API_HASH: ${if (API_HASH.isNotBlank() && API_HASH != "null") "Configured (${API_HASH.take(4)}...${API_HASH.takeLast(4)})" else "Missing or invalid"}")
             appendLine()
             appendLine("To configure:")
             appendLine("1. Obtain credentials from https://my.telegram.org")

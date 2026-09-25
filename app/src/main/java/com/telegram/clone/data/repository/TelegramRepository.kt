@@ -364,12 +364,12 @@ class TelegramRepository private constructor() {
      * Converts a TDLib message's sending state + read-outbox marker into a
      * 5-state [MessageStatus] sealed-class value.
      *
-     * - sendingState Pending  → Pending  (clock)
-     * - sendingState Failed   → Failed   (warning)
+     * - sendingState Pending  -> Pending  (clock)
+     * - sendingState Failed   -> Failed   (warning)
      * - sendingState null (sent successfully):
-     *     - outgoing && id <= lastReadOutboxMessageId → Read (blue double-check)
-     *     - outgoing && not read                      → Delivered (gray double-check)
-     *     - incoming                                   → null (no status icon)
+     *     - outgoing && id <= lastReadOutboxMessageId -> Read (blue double-check)
+     *     - outgoing && not read                      -> Delivered (gray double-check)
+     *     - incoming                                   -> null (no status icon)
      */
     private fun convertMessageStatus(
         message: TdApi.Message,

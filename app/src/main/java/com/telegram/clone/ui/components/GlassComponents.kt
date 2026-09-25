@@ -46,15 +46,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.telegram.clone.ui.theme.BadgeRed
 import com.telegram.clone.ui.theme.GlassBorder
 import com.telegram.clone.ui.theme.GlassBorderSoft
 import com.telegram.clone.ui.theme.GlassFill
 import com.telegram.clone.ui.theme.GlassFillStrong
+import com.telegram.clone.ui.theme.Ink
+import com.telegram.clone.ui.theme.MutedGray
 import com.telegram.clone.ui.theme.NovaCyan
 import com.telegram.clone.ui.theme.NovaGradientEnd
 import com.telegram.clone.ui.theme.NovaGradientStart
-import com.telegram.clone.ui.theme.NovaPinkRed
+import com.telegram.clone.ui.theme.NavDark
 import com.telegram.clone.ui.theme.NovaPurple
+import com.telegram.clone.ui.theme.BrandPurple
 
 /**
  * Nova glassmorphism component kit:
@@ -87,7 +91,7 @@ fun novaGradientBrush(horizontal: Boolean = true): Brush {
 }
 
 /**
- * Nova top header: soft purple-to-cyan gradient, glowing "Yugram" wordmark
+ * Nova top header: purple-to-blue gradient, glowing "Yugram" wordmark
  * on the left, trailing actions on the right. No hamburger menu.
  */
 @Composable
@@ -98,7 +102,7 @@ fun NovaGradientHeader(
     bottomRounded: Boolean = true
 ) {
     val shape = if (bottomRounded) {
-        RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
+        RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
     } else {
         RoundedCornerShape(0.dp)
     }
@@ -140,7 +144,7 @@ fun NovaGradientHeader(
 }
 
 /**
- * Floating glass search pill with a soft white border.
+ * Floating glass search pill with a soft white border (dark variant).
  */
 @Composable
 fun GlassSearchBar(
@@ -199,6 +203,74 @@ fun GlassSearchBar(
     }
 }
 
+/**
+ * Floating WHITE search pill per the interface spec: 48dp tall, fully
+ * rounded, soft drop shadow, gray search glyph, dark text. Overlaps the
+ * bottom edge of the gradient header.
+ */
+@Composable
+fun LightSearchBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "Cari kontak, chat, atau pesan",
+    enabled: Boolean = true
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .shadow(
+                elevation = 12.dp,
+                shape = RoundedCornerShape(24.dp),
+                ambientColor = Color(0x2E23145A),
+                spotColor = Color(0x2E23145A)
+            )
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0xFFF5FFFFFF)),
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = MutedGray,
+                modifier = Modifier.size(18.dp)
+            )
+            Box(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        color = MutedGray,
+                        fontSize = 15.sp
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    enabled = enabled,
+                    singleLine = true,
+                    textStyle = TextStyle(color = Ink, fontSize = 15.sp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (value.isNotEmpty()) {
+                IconButton(onClick = { onValueChange("") }, modifier = Modifier.size(22.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Clear",
+                        tint = MutedGray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 /** Nova top-level tabs for the floating bottom bar. */
 enum class NovaTab(val label: String) {
     CHATS("Chats"),
@@ -207,8 +279,9 @@ enum class NovaTab(val label: String) {
 }
 
 /**
- * Floating frosted-glass bottom navigation with soft purple glow on the
- * active tab. Pill-shaped, detached from screen edges.
+ * Floating DARK bottom navigation per the interface spec: near-opaque
+ * dark pill (radius 32), soft black shadow, the active tab is a solid
+ * brand-purple capsule, unread badge in spec red.
  */
 @Composable
 fun NovaBottomBar(
@@ -222,12 +295,13 @@ fun NovaBottomBar(
             modifier = Modifier
                 .padding(horizontal = 40.dp, vertical = 10.dp)
                 .fillMaxWidth()
-                .shadow(16.dp, RoundedCornerShape(28.dp), ambientColor = NovaPurple.copy(alpha = 0.35f))
-                .glassSurface(shape = RoundedCornerShape(28.dp), fill = Color(0xF2181822), border = GlassBorder),
+                .shadow(24.dp, RoundedCornerShape(32.dp), ambientColor = Color.Black.copy(alpha = 0.35f))
+                .clip(RoundedCornerShape(32.dp))
+                .background(NavDark),
             color = Color.Transparent
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -265,19 +339,19 @@ private fun NovaTabItem(
     unreadCount: Int,
     onClick: () -> Unit
 ) {
-    val tint = if (selected) Color.White else Color.White.copy(alpha = 0.55f)
-    val bg = if (selected) NovaPurple.copy(alpha = 0.55f) else Color.Transparent
+    val tint = if (selected) Color.White else Color(0xFFB8B8BE)
+    val bg = if (selected) BrandPurple else Color.Transparent
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(bg)
-            .padding(horizontal = 18.dp, vertical = 8.dp)
+            .padding(horizontal = 18.dp, vertical = 9.dp)
     ) {
         BadgedBox(
             badge = {
                 if (unreadCount > 0) {
                     Badge(
-                        containerColor = NovaPinkRed,
+                        containerColor = BadgeRed,
                         contentColor = Color.White
                     ) {
                         Text(text = if (unreadCount > 99) "99+" else unreadCount.toString())

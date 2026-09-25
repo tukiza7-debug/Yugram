@@ -65,6 +65,7 @@ import com.telegram.clone.R
 import com.telegram.clone.ui.theme.TelegramBlue
 import com.telegram.clone.ui.theme.TelegramCloneTheme
 import com.telegram.clone.ui.theme.TelegramTextStyles
+import androidx.compose.material.icons.filled.Send
 
 /**
  * Login screen implementing the multi-step authentication flow:
@@ -227,11 +228,11 @@ private fun TelegramLogo() {
             contentAlignment = Alignment.Center
         ) {
             // Simple paper plane icon using text
-            Text(
-                text = "✈",
-                color = Color.White,
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold
+            Icon(
+                imageVector = Icons.Default.Send,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(48.dp)
             )
         }
     }

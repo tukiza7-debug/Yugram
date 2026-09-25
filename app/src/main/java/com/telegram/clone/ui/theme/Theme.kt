@@ -21,40 +21,41 @@ import androidx.core.view.WindowCompat
 import com.telegram.clone.core.settings.AppSettingsManager
 
 /**
- * Nova — Material 3 theme for Yugram.
- * Dark-first glassmorphism scheme with the soft purple-to-cyan brand identity.
+ * Yugram — Material 3 theme.
+ * Light-first scheme on a white canvas with the purple-to-blue brand
+ * gradient; the optional dark scheme keeps the deep glass identity.
  */
 
 private val LightColorScheme = lightColorScheme(
-    primary = NovaPurple,
+    primary = BrandPurple,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE4DFFF),
+    primaryContainer = ChipPurpleBg,
     onPrimaryContainer = Color(0xFF241A5E),
-    secondary = NovaCyan,
-    onSecondary = Color(0xFF00202A),
-    secondaryContainer = Color(0xFFCFF3FF),
+    secondary = BrandBlue,
+    onSecondary = Color.White,
+    secondaryContainer = ChipBlueBg,
     onSecondaryContainer = Color(0xFF00323E),
-    tertiary = NovaGreen,
-    onTertiary = Color(0xFF00301F),
-    tertiaryContainer = NovaGreen.copy(alpha = 0.2f),
+    tertiary = ChipGreen,
+    onTertiary = Color.White,
+    tertiaryContainer = ChipGreenBg,
     onTertiaryContainer = Color(0xFF00291A),
-    error = StatusError,
+    error = BadgeRed,
     onError = Color.White,
-    errorContainer = StatusError.copy(alpha = 0.2f),
+    errorContainer = BadgeRed.copy(alpha = 0.12f),
     onErrorContainer = Color(0xFF410009),
-    background = BackgroundLight,
-    onBackground = TextPrimaryLight,
-    surface = SurfaceLight,
-    onSurface = TextPrimaryLight,
-    surfaceVariant = Color(0xFFE8E8F0),
-    onSurfaceVariant = TextSecondaryLight,
-    outline = DividerLight,
-    outlineVariant = DividerLight.copy(alpha = 0.5f),
+    background = PageWhite,
+    onBackground = Ink,
+    surface = CardBg,
+    onSurface = Ink,
+    surfaceVariant = Color(0xFFF2F2F6),
+    onSurfaceVariant = MutedGray,
+    outline = Hairline,
+    outlineVariant = Hairline,
     scrim = Color.Black.copy(alpha = 0.3f),
     inverseSurface = Color(0xFF2B2B33),
     inverseOnSurface = Color.White,
-    inversePrimary = NovaPurple,
-    surfaceTint = NovaPurple
+    inversePrimary = BrandPurple,
+    surfaceTint = BrandPurple
 )
 
 private val DarkColorScheme = darkColorScheme(
