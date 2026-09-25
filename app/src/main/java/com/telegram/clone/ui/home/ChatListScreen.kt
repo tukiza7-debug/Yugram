@@ -131,7 +131,7 @@ fun ChatListScreen(
                             shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                         )
                         .statusBarsPadding()
-                        .padding(horizontal = 8.dp, top = 10.dp, bottom = 62.dp)
+                        .padding(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 62.dp)
                 ) {
                     Text(
                         text = "Yugram",
