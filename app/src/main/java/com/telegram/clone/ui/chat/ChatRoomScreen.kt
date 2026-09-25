@@ -496,7 +496,7 @@ private fun EmptyChatState() {
             modifier = Modifier.padding(32.dp)
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.Chat,
+                imageVector = Icons.Default.Chat,
                 contentDescription = "No messages",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(56.dp)
