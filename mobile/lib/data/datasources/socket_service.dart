@@ -5,6 +5,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../../core/constants/app_constants.dart';
 import '../../core/network/socket_connection_state.dart';
 import '../../core/utils/app_logger.dart';
+import '../../domain/entities/message_entity.dart';
 import '../models/message_model.dart';
 import '../models/socket_payload_models.dart';
 
@@ -39,6 +40,9 @@ class SocketService {
   io.Socket? _socket;
   SocketConnectionState _state = SocketConnectionState.idle;
 
+  /// ID pengguna semasa (diperlukan untuk mengurai payload room_updated).
+  String? _currentUserId;
+
   // ---------- STREAM CONTROLLERS (broadcast - boleh ada banyak pemerhati) ----------
   final StreamController<SocketConnectionState> _connectionStateController =
       StreamController<SocketConnectionState>.broadcast();
@@ -56,6 +60,15 @@ class SocketService {
       StreamController<RoomJoinedPayload>.broadcast();
   final StreamController<SocketErrorPayload> _errorController =
       StreamController<SocketErrorPayload>.broadcast();
+  // FASA 2 + 3
+  final StreamController<MessageEditedPayload> _messageEditedController =
+      StreamController<MessageEditedPayload>.broadcast();
+  final StreamController<MessageDeletedPayload> _messageDeletedController =
+      StreamController<MessageDeletedPayload>.broadcast();
+  final StreamController<RoomUpdatedPayload> _roomUpdatedController =
+      StreamController<RoomUpdatedPayload>.broadcast();
+  final StreamController<RoomDeletedPayload> _roomDeletedController =
+      StreamController<RoomDeletedPayload>.broadcast();
 
   // ---------- STREAM AWAM (untuk BLoC) ----------
   Stream<SocketConnectionState> get connectionState => _connectionStateController.stream;
@@ -66,6 +79,11 @@ class SocketService {
   Stream<ReactionUpdatePayload> get onReactionUpdated => _reactionController.stream;
   Stream<RoomJoinedPayload> get onRoomJoined => _roomJoinedController.stream;
   Stream<SocketErrorPayload> get onError => _errorController.stream;
+  // FASA 2 + 3
+  Stream<MessageEditedPayload> get onMessageEdited => _messageEditedController.stream;
+  Stream<MessageDeletedPayload> get onMessageDeleted => _messageDeletedController.stream;
+  Stream<RoomUpdatedPayload> get onRoomUpdated => _roomUpdatedController.stream;
+  Stream<RoomDeletedPayload> get onRoomDeleted => _roomDeletedController.stream;
 
   SocketConnectionState get state => _state;
   bool get isConnected => _state == SocketConnectionState.connected;
@@ -76,8 +94,9 @@ class SocketService {
 
   /// Menyambung ke pelayan dengan token JWT melalui handshake auth.
   /// Reconnection automatik diaktifkan (2s..10s, 20 percubaan).
-  void connect({required String baseUrl, required String token}) {
+  void connect({required String baseUrl, required String token, String? userId}) {
     try {
+      _currentUserId = userId;
       if (_socket != null) {
         disconnect();
       }
@@ -169,6 +188,31 @@ class SocketService {
       (dynamic data) =>
           _safeAdd(_errorController, data, SocketErrorPayload.fromJson, AppEvents.error),
     );
+    // ----- FASA 2 + 3: edit/padam mesej + kemas kini kumpulan -----
+    socket.on(
+      AppEvents.messageEdited,
+      (dynamic data) => _safeAdd(_messageEditedController, data,
+          MessageEditedPayload.fromJson, AppEvents.messageEdited),
+    );
+    socket.on(
+      AppEvents.messageDeleted,
+      (dynamic data) => _safeAdd(_messageDeletedController, data,
+          MessageDeletedPayload.fromJson, AppEvents.messageDeleted),
+    );
+    socket.on(
+      AppEvents.roomUpdated,
+      (dynamic data) => _safeAdd(
+          _roomUpdatedController,
+          data,
+          (Map<String, dynamic> json) =>
+              RoomUpdatedPayload.fromJson(json, currentUserId: _currentUserId ?? ''),
+          AppEvents.roomUpdated),
+    );
+    socket.on(
+      AppEvents.roomDeleted,
+      (dynamic data) => _safeAdd(
+          _roomDeletedController, data, RoomDeletedPayload.fromJson, AppEvents.roomDeleted),
+    );
   }
 
   /// Memutuskan sambungan dan membersihkan socket.
@@ -192,7 +236,8 @@ class SocketService {
   bool emitJoinRoom({required String roomId}) =>
       _safeEmit(AppEvents.joinRoom, <String, dynamic>{'roomId': roomId});
 
-  /// Menghantar mesej (termasuk bendera isSilent untuk Fitur 64).
+  /// Menghantar mesej (termasuk bendera isSilent untuk Fitur 64, media
+  /// untuk FASA 2 dan label terusan untuk FASA 3).
   /// [tempId] dipulangkan semula oleh event message_ack (tick tunggal).
   bool emitSendMessage({
     required String roomId,
@@ -200,12 +245,16 @@ class SocketService {
     required String tempId,
     bool isSilent = false,
     String? replyToMessageId,
+    MediaEntity? media,
+    String? forwardedFromName,
   }) =>
       _safeEmit(AppEvents.sendMessage, <String, dynamic>{
         'roomId': roomId,
         'text': text,
         'isSilent': isSilent,
         'replyToMessageId': replyToMessageId,
+        'media': media != null && media.url.isNotEmpty ? media.toJson() : null,
+        'forwardedFromName': forwardedFromName,
         'tempId': tempId,
       });
 
@@ -304,5 +353,9 @@ class SocketService {
     _reactionController.close();
     _roomJoinedController.close();
     _errorController.close();
+    _messageEditedController.close();
+    _messageDeletedController.close();
+    _roomUpdatedController.close();
+    _roomDeletedController.close();
   }
 }

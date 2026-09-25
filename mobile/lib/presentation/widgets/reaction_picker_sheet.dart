@@ -17,22 +17,37 @@ class ReactionSheetAction {
       : type = ReactionSheetActionType.copy,
         emoji = null;
 
+  const ReactionSheetAction.edit()
+      : type = ReactionSheetActionType.edit,
+        emoji = null;
+
+  const ReactionSheetAction.delete()
+      : type = ReactionSheetActionType.delete,
+        emoji = null;
+
+  const ReactionSheetAction.forward()
+      : type = ReactionSheetActionType.forward,
+        emoji = null;
+
   final ReactionSheetActionType type;
   final String? emoji;
 }
 
-enum ReactionSheetActionType { react, reply, copy }
+enum ReactionSheetActionType { react, reply, copy, edit, delete, forward }
 
-/// Bottom sheet reaksi pantas (Fitur 67) + aksi balas/salin.
+/// Bottom sheet reaksi pantas (Fitur 67) + aksi balas/salin/edit/padam/teruskan.
 Future<ReactionSheetAction?> showReactionPickerSheet(
   BuildContext context, {
   required MessageEntity message,
   required String myUserId,
+  required bool canDelete,
 }) {
   final String? myCurrentReaction = message.reactions
       .where((ReactionEntity r) => r.userId == myUserId)
       .map((ReactionEntity r) => r.emoji)
       .fold<String?>(null, (String? acc, String e) => acc ?? e);
+
+  final bool canEdit = message.senderId == myUserId && !message.hasMedia;
 
   return showModalBottomSheet<ReactionSheetAction>(
     context: context,
@@ -104,6 +119,17 @@ Future<ReactionSheetAction?> showReactionPickerSheet(
                   ),
                   Expanded(
                     child: TextButton.icon(
+                      onPressed: () => Navigator.of(sheetContext).pop(const ReactionSheetAction.forward()),
+                      icon: const Icon(Icons.shortcut),
+                      label: const Text('Teruskan'),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextButton.icon(
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: message.text));
                         Navigator.of(sheetContext).pop(const ReactionSheetAction.copy());
@@ -112,6 +138,23 @@ Future<ReactionSheetAction?> showReactionPickerSheet(
                       label: const Text('Salin'),
                     ),
                   ),
+                  if (canEdit)
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () => Navigator.of(sheetContext).pop(const ReactionSheetAction.edit()),
+                        icon: const Icon(Icons.edit),
+                        label: const Text('Edit'),
+                      ),
+                    ),
+                  if (canDelete)
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () => Navigator.of(sheetContext).pop(const ReactionSheetAction.delete()),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Padam'),
+                        style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                      ),
+                    ),
                 ],
               ),
             ],

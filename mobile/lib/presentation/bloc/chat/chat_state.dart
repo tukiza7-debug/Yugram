@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
-import '../../core/network/socket_connection_state.dart';
-import '../../domain/entities/message_entity.dart';
+import '../../../core/network/socket_connection_state.dart';
+import '../../../domain/entities/message_entity.dart';
 
 /// Keadaan lengkap skrin sembang.
 class ChatState extends Equatable {
@@ -13,6 +13,8 @@ class ChatState extends Equatable {
     this.replyToMessageId,
     this.isLoadingHistory = true,
     this.errorMessage,
+    this.editingMessageId,
+    this.roomDeleted = false,
   });
 
   factory ChatState.initial({required String roomTitle}) =>
@@ -27,6 +29,13 @@ class ChatState extends Equatable {
 
   /// Mesej yang sedang dibalas (composer).
   final String? replyToMessageId;
+
+  /// FASA 3: mesej yang sedang DIEDIT (composer mod edit).
+  final String? editingMessageId;
+
+  /// FASA 2: kumpulan telah dipadam - skrin perlu ditutup.
+  final bool roomDeleted;
+
   final bool isLoadingHistory;
   final String? errorMessage;
 
@@ -58,15 +67,21 @@ class ChatState extends Equatable {
     bool? isLoadingHistory,
     String? errorMessage,
     bool clearError = false,
+    String? editingMessageId,
+    bool clearEditing = false,
+    bool? roomDeleted,
+    String? roomTitle,
   }) {
     return ChatState(
-      roomTitle: roomTitle,
+      roomTitle: roomTitle ?? this.roomTitle,
       messages: messages ?? this.messages,
       typingUsers: typingUsers ?? this.typingUsers,
       connectionState: connectionState ?? this.connectionState,
       replyToMessageId: clearReply ? null : (replyToMessageId ?? this.replyToMessageId),
       isLoadingHistory: isLoadingHistory ?? this.isLoadingHistory,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      editingMessageId: clearEditing ? null : (editingMessageId ?? this.editingMessageId),
+      roomDeleted: roomDeleted ?? this.roomDeleted,
     );
   }
 
@@ -77,6 +92,8 @@ class ChatState extends Equatable {
         typingUsers,
         connectionState,
         replyToMessageId,
+        editingMessageId,
+        roomDeleted,
         isLoadingHistory,
         errorMessage,
       ];

@@ -30,6 +30,7 @@ const envSchema = Joi.object({
   MESSAGE_RATE_LIMIT_PER_MINUTE: Joi.number().integer().min(1).default(60),
   HISTORY_PAGE_SIZE_DEFAULT: Joi.number().integer().min(1).max(100).default(30),
   PUSH_ENDPOINT: Joi.string().uri({ scheme: ['http', 'https'] }).allow('').default(''),
+  MEDIA_MAX_SIZE_MB: Joi.number().integer().min(1).max(100).default(10),
   LOG_LEVEL: Joi.string().valid('debug', 'info', 'warn', 'error').default('info'),
 }).unknown(true);
 
@@ -72,5 +73,6 @@ module.exports = {
   messageRateLimitPerMinute: value.MESSAGE_RATE_LIMIT_PER_MINUTE,
   historyPageSizeDefault: value.HISTORY_PAGE_SIZE_DEFAULT,
   pushEndpoint: value.PUSH_ENDPOINT,
+  mediaMaxSizeMb: value.MEDIA_MAX_SIZE_MB,
   logLevel: value.LOG_LEVEL,
 };

@@ -23,6 +23,7 @@ const config = require('../config/env');
 const logger = require('../utils/logger');
 const { SOCKET_EVENTS } = require('../utils/constants');
 const socketAuth = require('./socketAuth');
+const socketGateway = require('./socketGateway');
 const roomService = require('../services/room.service');
 const messageService = require('../services/message.service');
 const userRepository = require('../repositories/user.repository');
@@ -56,6 +57,7 @@ function registerChatSocket(httpServer) {
 
   io.use(socketAuth);
   io.on('connection', (socket) => handleConnection(io, socket));
+  socketGateway.setIO(io);
 
   log.info('Socket.IO chat server didaftarkan', {
     pingIntervalMs: config.socketPingIntervalMs,
@@ -156,6 +158,8 @@ function handleConnection(io, socket) {
         text: payload.text,
         isSilent: payload.isSilent,
         replyToMessageId: payload.replyToMessageId,
+        media: payload.media,
+        forwardedFromName: payload.forwardedFromName,
         tempId: payload.tempId,
       });
 

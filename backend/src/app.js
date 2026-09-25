@@ -10,6 +10,7 @@ const cors = require('cors');
 const config = require('./config/env');
 const logger = require('./utils/logger');
 const routes = require('./routes');
+const { UPLOAD_DIR } = require('./middlewares/upload.middleware');
 const { notFoundHandler, errorHandler } = require('./middlewares/error.middleware');
 
 const log = logger.child('HTTP');
@@ -48,6 +49,12 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// FASA 2: fail media yang dimuat naik dihidang statik (nama cakera rawak).
+app.use('/uploads', express.static(UPLOAD_DIR, {
+  maxAge: '30d',
+  immutable: true,
+}));
 
 app.use('/api', routes);
 

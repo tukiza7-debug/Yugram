@@ -1,4 +1,4 @@
-# Yugram — FASA 1: Modul Utama Sembang & Masa Nyata
+# Yugram — Modul Sembang & Masa Nyata (FASA 1 + 2 + 3)
 
 Rebuild aplikasi Telegram Clone dengan tindanan (stack) baharu:
 
@@ -20,7 +20,7 @@ sedia untuk production.**
 ## Struktur Projek
 
 ```
-yugram/
+yugram-v2/
 ├── backend/                       # Node.js + Socket.io + PostgreSQL
 │   ├── src/
 │   │   ├── config/                # env.js (validasi Joi), database.js (Sequelize)
@@ -38,7 +38,7 @@ yugram/
 │   ├── database/schema.sql        # DDL PostgreSQL penuh (production)
 │   └── scripts/                   # db-sync, syntax-check, smoke-test (e2e)
 │
-└── mobile/                      # Flutter + BLoC + socket_io_client
+└── frontend/                      # Flutter + BLoC + socket_io_client
     └── lib/
         ├── core/                  # constants, network state, logger, error
         ├── data/
@@ -68,6 +68,30 @@ yugram/
 
 ---
 
+## FASA 2 — Kumpulan, Profil & Media (Semua Berfungsi, 44 Semakan E2E)
+
+| Fitur | Implementasi |
+|-------|--------------|
+| Sembang Kumpulan | `POST /api/rooms/group` (nama + memberUsernames[]); pencipta = admin; keahlian dalam transaksi |
+| Urus Keahlian | Tambah (ahli mana-mana boleh tambah), buang (admin sahaja, admin tak boleh dibuang), lantik admin (pencipta), keluar (pencipta sekat jika tiada admin lain), padam kumpulan (pencipta) |
+| Broadcast Metadata | `room_updated` (tambah/buang/lantik/rename) + `room_deleted` — semua ahli dikemas kini masa nyata |
+| Profil Pengguna | `PATCH /api/users/me` (displayName, bio, username - konflik unik = 409); skrin Profil Flutter |
+| Carian Pengguna | `GET /api/users/search?q=` (ILIKE username/displayName, tak termasuk diri) |
+| Media | `POST /api/media` (multipart: imej/video mp4/pdf, max 10MB, nama cakera rawak); mesej bermedia `media JSONB`; dihidang statik `/uploads/` |
+| Unread Count | `GET /api/rooms` memulangkan `unreadCount` per bilik (badge senarai sembang) |
+| Muat Turun Pukal | `GET /api/rooms/:id/media` + "Muat turun semua" dalam skrin info kumpulan (disimpan ke storan peranti) |
+
+## FASA 3 — Kuasa Mesej (Semua Berfungsi)
+
+| Fitur | Implementasi |
+|-------|--------------|
+| Edit Mesej | `PATCH /api/messages/:id` (penghantar sahaja) → `isEdited`, `editedAt` + broadcast `message_edited`; UI composer mod edit |
+| Padam Mesej | `DELETE /api/messages/:id` (penghantar atau admin) + broadcast `message_deleted` |
+| Teruskan (Forward) | `send_message` dengan `forwardedFromName` — label "Diteruskan dari X"; pemilih bilik sasaran dalam UI |
+| Carian Dalam Sembang | `GET /api/rooms/:id/messages?q=` (ILIKE, tidak kes sensitif) + dialog carian |
+
+---
+
 ## Kontrak Event Socket.io
 
 ### Client → Server
@@ -75,7 +99,7 @@ yugram/
 | Event | Payload |
 |---|---|
 | `join_room` | `{ roomId }` |
-| `send_message` | `{ roomId, text, isSilent, replyToMessageId, tempId }` |
+| `send_message` | `{ roomId, text, isSilent, replyToMessageId, media?, forwardedFromName?, tempId }` |
 | `message_read` | `{ roomId, lastReadMessageId }` |
 | `typing_status` | `{ roomId, isTyping }` |
 | `add_reaction` | `{ messageId, emoji }` |
@@ -87,10 +111,14 @@ yugram/
 | `connection_ready` | `{ userId, username, displayName, serverTime }` |
 | `room_joined` | `{ roomId, members[], messages[], serverTime }` |
 | `message_ack` | `{ tempId, message, status: "sent" }` → **tick tunggal** |
-| `new_message` | `{ message }` (termasuk `isSilent`) |
+| `new_message` | `{ message }` (termasuk `isSilent`, `media`, `forwardedFromName`) |
 | `read_receipt` | `{ roomId, userId, messageIds[], readAt }` → **tick berganda** |
 | `typing_status` | `{ roomId, userId, displayName, isTyping }` |
 | `reaction_updated` | `{ messageId, roomId, reactions[], updatedBy }` |
+| `message_edited` | `{ roomId, message }` (mesej penuh terkini) |
+| `message_deleted` | `{ roomId, messageId, deletedBy }` |
+| `room_updated` | `{ room, members[], updatedBy }` |
+| `room_deleted` | `{ roomId, reason }` |
 | `error` | `{ event, code, message, details }` |
 
 Pengesahan: token JWT dihantar melalui handshake — `io(url, { auth: { token } })`.
@@ -105,11 +133,14 @@ messages (
   id                  UUID PRIMARY KEY,
   sender_id           UUID NOT NULL -> users,
   room_id             UUID NOT NULL -> rooms,
-  text                TEXT NOT NULL (1..4096),
+  text                TEXT NOT NULL (0..4096; teks kosong dibenarkan jika ada media),
   is_silent           BOOLEAN NOT NULL DEFAULT FALSE,   -- Fitur 64
-  is_edited           BOOLEAN NOT NULL DEFAULT FALSE,
+  is_edited           BOOLEAN NOT NULL DEFAULT FALSE,   -- FASA 3
+  edited_at           TIMESTAMPTZ,                      -- FASA 3
   reply_to_message_id UUID -> messages (SET NULL),
   reactions           JSONB NOT NULL DEFAULT '[]',      -- Fitur 67
+  media               JSONB,                            -- FASA 2 {url,name,mimeType,size}
+  forwarded_from_name VARCHAR(64),                     -- FASA 3
   created_at / updated_at TIMESTAMPTZ
 )
 ```
@@ -142,15 +173,18 @@ Sahkan konfigurasi melalui `.env` (contoh: `.env.example`).
 
 ```bash
 cd backend
-npm run smoke-test           # 20 semakan: ticks, typing, reactions, silent, keselamatan
+npm run smoke-test            # FASA 1: 20 semakan (ticks, typing, reactions, silent, keselamatan)
+npm run smoke-test:fasa23     # FASA 2+3: 44 semakan (kumpulan, profil, media, edit, padam, forward, carian)
 ```
 
-Hasil rujukan semasa pembinaan: **20 PASS / 0 FAIL** terhadap PostgreSQL sebenar.
+Hasil rujukan semasa pembinaan: **FASA 1 = 20 PASS / 0 FAIL**, **FASA 2+3 = 44 PASS / 0 FAIL**
+terhadap PostgreSQL sebenar.
 
 ### 3. Frontend Flutter
 
 ```bash
 cd mobile
+flutter create . --project-name yugram_chat --platforms android --org dev.yugram   # sekali sahaja (jana scaffolding)
 flutter pub get
 flutter run                  # emulator Android (API: http://10.0.2.2:4000)
 ```
@@ -161,6 +195,12 @@ Untuk peranti fizikal, tukar `AppConstants.apiBaseUrl`
 ```bash
 flutter run --dart-define=YUGRAM_API_URL=http://192.168.1.10:4000
 ```
+
+### 4. APK Automatik (GitHub Actions)
+
+Workflow `.github/workflows/flutter-build.yml` membina **APK release** pada setiap
+push ke `main` yang mengubah `mobile/`. Muat turun artifact **yugram-apk**
+dari tab Actions — aplikasi sedia dipasang tanpa perlu Flutter tempatan.
 
 ---
 

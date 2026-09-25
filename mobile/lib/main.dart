@@ -6,12 +6,16 @@ import 'core/constants/app_constants.dart';
 import 'core/utils/app_logger.dart';
 import 'data/datasources/api_client.dart';
 import 'data/datasources/auth_api.dart';
+import 'data/datasources/media_store.dart';
 import 'data/datasources/socket_service.dart';
 import 'data/datasources/token_store.dart';
+import 'data/datasources/user_api.dart';
 import 'data/repositories/auth_repository_impl.dart';
 import 'data/repositories/chat_repository_impl.dart';
+import 'data/repositories/user_repository_impl.dart';
 import 'domain/repositories/auth_repository.dart';
 import 'domain/repositories/chat_repository.dart';
+import 'domain/repositories/user_repository.dart';
 import 'presentation/bloc/auth/auth_cubit.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/rooms_screen.dart';
@@ -24,7 +28,9 @@ Future<void> main() async {
     final TokenStore tokenStore = TokenStore(prefs);
     final ApiClient apiClient = ApiClient(baseUrl: AppConstants.apiBaseUrl, tokenStore: tokenStore);
     final AuthApi authApi = AuthApi(apiClient);
+    final UserApi userApi = UserApi(apiClient);
     final SocketService socketService = SocketService();
+    final MediaStore mediaStore = MediaStore();
 
     final AuthRepository authRepository = AuthRepositoryImpl(
       authApi: authApi,
@@ -37,10 +43,16 @@ Future<void> main() async {
       apiClient: apiClient,
       tokenStore: tokenStore,
     );
+    final UserRepository userRepository = UserRepositoryImpl(
+      userApi: userApi,
+      tokenStore: tokenStore,
+    );
 
     runApp(YugramApp(
       authRepository: authRepository,
       chatRepository: chatRepository,
+      userRepository: userRepository,
+      mediaStore: mediaStore,
     ));
   } catch (err, stackTrace) {
     log.error('Permulaan aplikasi gagal', err, stackTrace);
@@ -52,11 +64,15 @@ class YugramApp extends StatelessWidget {
   const YugramApp({
     required this.authRepository,
     required this.chatRepository,
+    required this.userRepository,
+    required this.mediaStore,
     super.key,
   });
 
   final AuthRepository authRepository;
   final ChatRepository chatRepository;
+  final UserRepository userRepository;
+  final MediaStore mediaStore;
 
   ThemeData _buildTheme(BuildContext context) {
     final ColorScheme scheme = ColorScheme.fromSeed(
@@ -80,6 +96,8 @@ class YugramApp extends StatelessWidget {
       providers: <RepositoryProvider<dynamic>>[
         RepositoryProvider<AuthRepository>.value(value: authRepository),
         RepositoryProvider<ChatRepository>.value(value: chatRepository),
+        RepositoryProvider<UserRepository>.value(value: userRepository),
+        RepositoryProvider<MediaStore>.value(value: mediaStore),
       ],
       child: BlocProvider<AuthCubit>(
         create: (BuildContext context) {
@@ -108,7 +126,10 @@ class _AuthGate extends StatelessWidget {
     return BlocBuilder<AuthCubit, AuthState>(
       builder: (BuildContext context, AuthState state) {
         if (state is AuthSuccess) {
-          return RoomsScreen(session: state.session);
+          return RoomsScreen(
+            session: state.session,
+            mediaStore: context.read<MediaStore>(),
+          );
         }
         if (state is AuthUnauthenticated || state is AuthFailure) {
           return const LoginScreen();

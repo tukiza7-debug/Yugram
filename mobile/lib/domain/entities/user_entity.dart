@@ -5,6 +5,7 @@ class UserEntity extends Equatable {
     required this.id,
     required this.username,
     required this.displayName,
+    this.bio,
     this.avatarUrl,
     this.lastSeenAt,
   });
@@ -12,6 +13,9 @@ class UserEntity extends Equatable {
   final String id;
   final String username;
   final String displayName;
+
+  /// FASA 2: bio ringkas pengguna (maks 280 aksara).
+  final String? bio;
   final String? avatarUrl;
   final DateTime? lastSeenAt;
 
@@ -39,5 +43,5 @@ class UserEntity extends Equatable {
   }
 
   @override
-  List<Object?> get props => <Object?>[id, username, displayName, avatarUrl, lastSeenAt];
+  List<Object?> get props => <Object?>[id, username, displayName, bio, avatarUrl, lastSeenAt];
 }

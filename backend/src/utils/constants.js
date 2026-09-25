@@ -22,6 +22,10 @@ const SOCKET_EVENTS = {
   MESSAGE_ACK: 'message_ack',
   READ_RECEIPT: 'read_receipt',
   REACTION_UPDATED: 'reaction_updated',
+  MESSAGE_EDITED: 'message_edited',
+  MESSAGE_DELETED: 'message_deleted',
+  ROOM_UPDATED: 'room_updated',
+  ROOM_DELETED: 'room_deleted',
   ERROR: 'error',
 };
 
@@ -40,7 +44,23 @@ const MESSAGE_MAX_LENGTH = 4096;
 const REACTION_MAX_LENGTH = 32;
 const USERNAME_MAX_LENGTH = 32;
 const DISPLAY_NAME_MAX_LENGTH = 64;
+const USER_BIO_MAX_LENGTH = 280;
 const ROOM_NAME_MAX_LENGTH = 64;
+const FORWARDED_FROM_MAX_LENGTH = 64;
+const SEARCH_QUERY_MAX_LENGTH = 64;
+const USER_SEARCH_LIMIT = 20;
+const MEDIA_MAX_SIZE_MB = 10;
+const MEDIA_MAX_SIZE_BYTES = MEDIA_MAX_SIZE_MB * 1024 * 1024;
+
+/** Jenis media yang dibenarkan untuk muat naik (mime types) */
+const ALLOWED_MEDIA_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'application/pdf',
+];
 const ROOM_TYPE = {
   DIRECT: 'direct',
   GROUP: 'group',
@@ -61,7 +81,14 @@ module.exports = {
   REACTION_MAX_LENGTH,
   USERNAME_MAX_LENGTH,
   DISPLAY_NAME_MAX_LENGTH,
+  USER_BIO_MAX_LENGTH,
   ROOM_NAME_MAX_LENGTH,
+  FORWARDED_FROM_MAX_LENGTH,
+  SEARCH_QUERY_MAX_LENGTH,
+  USER_SEARCH_LIMIT,
+  MEDIA_MAX_SIZE_MB,
+  MEDIA_MAX_SIZE_BYTES,
+  ALLOWED_MEDIA_MIME_TYPES,
   ROOM_TYPE,
   MEMBER_ROLE,
   PUBLIC_USER_ATTRS,

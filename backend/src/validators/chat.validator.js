@@ -8,7 +8,12 @@
 
 const Joi = require('joi');
 const ApiError = require('../utils/apiError');
-const { MESSAGE_MAX_LENGTH, REACTION_MAX_LENGTH } = require('../utils/constants');
+const {
+  MESSAGE_MAX_LENGTH,
+  REACTION_MAX_LENGTH,
+  FORWARDED_FROM_MAX_LENGTH,
+  MEDIA_MAX_SIZE_BYTES,
+} = require('../utils/constants');
 
 const uuidSchema = Joi.string().uuid({ version: ['uuidv4', 'uuidv1', 'uuidv5'] });
 
@@ -16,11 +21,23 @@ const joinRoomSchema = Joi.object({
   roomId: uuidSchema.required(),
 }).required();
 
+/** Skema lampiran media dalam send_message (hasil /api/media) */
+const mediaSchema = Joi.object({
+  url: Joi.string().trim().min(1).max(512).required(),
+  name: Joi.string().trim().max(255).allow('').default(''),
+  mimeType: Joi.string().trim().max(128).allow('').default(''),
+  size: Joi.number().integer().min(0).max(MEDIA_MAX_SIZE_BYTES).default(0),
+});
+
 const sendMessageSchema = Joi.object({
   roomId: uuidSchema.required(),
-  text: Joi.string().trim().min(1).max(MESSAGE_MAX_LENGTH).required(),
+  // Teks dibenarkan kosong APABILA media dilampirkan; peraturan
+  // "teks ATAU media" dikuatkuasakan dalam message.service.
+  text: Joi.string().trim().allow('').max(MESSAGE_MAX_LENGTH).default(''),
   isSilent: Joi.boolean().default(false),
   replyToMessageId: uuidSchema.allow(null).default(null),
+  media: mediaSchema.allow(null).default(null),
+  forwardedFromName: Joi.string().trim().allow(null, '').max(FORWARDED_FROM_MAX_LENGTH).default(null),
   tempId: Joi.string().trim().max(64).allow(null, '').default(null),
 }).required();
 

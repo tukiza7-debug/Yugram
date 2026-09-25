@@ -1,0 +1,60 @@
+name: mobile-apk
+
+# FASA 2+3: Membina APK aplikasi mobile (Flutter) pada setiap push ke main.
+# Artifact "yugram-apk" boleh dimuat turun dari tab Actions.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/flutter-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Bina APK Yugram
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter version
+        run: flutter --version
+
+      # mobile/ menyimpan lib/ + pubspec.yaml sahaja; scaffolding Android
+      # dijana semula di CI supaya repo kekal ringan.
+      - name: Jana scaffolding Android
+        working-directory: mobile
+        run: flutter create . --project-name yugram_chat --platforms android --org dev.yugram
+
+      - name: flutter pub get
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: flutter analyze (laporan, tidak menyekat binaan)
+        working-directory: mobile
+        run: flutter analyze
+        continue-on-error: true
+
+      - name: flutter build apk (release)
+        working-directory: mobile
+        run: flutter build apk --release
+
+      - name: Muat naik APK sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yugram-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error

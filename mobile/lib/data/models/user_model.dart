@@ -5,6 +5,7 @@ class UserModel extends UserEntity {
     required super.id,
     required super.username,
     required super.displayName,
+    super.bio,
     super.avatarUrl,
     super.lastSeenAt,
   });
@@ -13,6 +14,7 @@ class UserModel extends UserEntity {
         id: json['id']?.toString() ?? '',
         username: json['username']?.toString() ?? '',
         displayName: json['displayName']?.toString() ?? '',
+        bio: json['bio']?.toString(),
         avatarUrl: json['avatarUrl']?.toString(),
         lastSeenAt: json['lastSeenAt'] == null
             ? null

@@ -2,29 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/datasources/media_store.dart';
 import '../../domain/entities/auth_session.dart';
 import '../../domain/entities/room_entity.dart';
 import '../../domain/repositories/chat_repository.dart';
+import '../../domain/repositories/user_repository.dart';
 import '../bloc/auth/auth_cubit.dart';
 import '../bloc/rooms/rooms_cubit.dart';
 import 'chat_screen.dart';
+import 'create_group_screen.dart';
+import 'profile_screen.dart';
 
-/// Skrin senarai sembang dengan sokongan sembah direct baharu.
+/// Skrin senarai sembang (FASA 1 + 2): sembang direct, kumpulan,
+/// badge belum-baca, profil dan ciptaan kumpulan.
 class RoomsScreen extends StatelessWidget {
-  const RoomsScreen({required this.session, super.key});
+  const RoomsScreen({
+    required this.session,
+    required this.mediaStore,
+    super.key,
+  });
 
   final AuthSession session;
+  final MediaStore mediaStore;
 
-  void _openChat(BuildContext context, RoomEntity room) {
-    Navigator.of(context).push(
+  void _openChat(BuildContext context, RoomEntity room) async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (BuildContext context) => ChatScreen(
           room: room,
           currentUserId: session.userId,
           repository: context.read<ChatRepository>(),
+          mediaStore: mediaStore,
         ),
       ),
     );
+    // Segarkan senarai selepas kembali (kumpulan mungkin berubah).
+    if (context.mounted) {
+      context.read<RoomsCubit>().loadRooms();
+    }
   }
 
   Future<void> _showNewChatDialog(BuildContext context) async {
@@ -70,6 +85,27 @@ class RoomsScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _createGroup(BuildContext context) async {
+    final RoomEntity? room = await Navigator.of(context).push(
+      MaterialPageRoute<RoomEntity>(
+        builder: (BuildContext context) =>
+            CreateGroupScreen(repository: context.read<ChatRepository>()),
+      ),
+    );
+    if (room != null && context.mounted) {
+      _openChat(context, room);
+    }
+  }
+
+  Future<void> _openProfile(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            ProfileScreen(userRepository: context.read<UserRepository>()),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
@@ -80,9 +116,19 @@ class RoomsScreen extends StatelessWidget {
         foregroundColor: scheme.onPrimary,
         actions: <Widget>[
           IconButton(
+            tooltip: 'Kumpulan Baharu',
+            icon: const Icon(Icons.group_add),
+            onPressed: () => _createGroup(context),
+          ),
+          IconButton(
             tooltip: 'Sembang Baharu',
             icon: const Icon(Icons.edit_note),
             onPressed: () => _showNewChatDialog(context),
+          ),
+          IconButton(
+            tooltip: 'Profil',
+            icon: const Icon(Icons.account_circle_outlined),
+            onPressed: () => _openProfile(context),
           ),
           IconButton(
             tooltip: 'Log keluar',
@@ -165,30 +211,66 @@ class RoomsScreen extends StatelessWidget {
                   leading: CircleAvatar(
                     radius: 24,
                     backgroundColor: scheme.primaryContainer,
-                    child: Text(
-                      room.title.isNotEmpty ? room.title[0].toUpperCase() : '?',
-                      style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
-                    ),
+                    child: room.isGroup
+                        ? Icon(Icons.group, color: scheme.primary)
+                        : Text(
+                            room.title.isNotEmpty ? room.title[0].toUpperCase() : '?',
+                            style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
+                          ),
                   ),
-                  title: Text(
-                    room.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    room.lastMessageText == null
-                        ? 'Belum ada mesej'
-                        : '${isMineLast ? 'Anda: ' : ''}${room.previewText}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: room.lastMessageAt == null
-                      ? null
-                      : Text(
-                          DateFormat('HH:mm').format(room.lastMessageAt!.toLocal()),
-                          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                  title: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          room.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
+                      ),
+                      if (room.lastMessageAt != null)
+                        Text(
+                          DateFormat('HH:mm').format(room.lastMessageAt!.toLocal()),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: room.hasUnread
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                            fontWeight:
+                                room.hasUnread ? FontWeight.w700 : FontWeight.w400,
+                          ),
+                        ),
+                    ],
+                  ),
+                  subtitle: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          room.lastMessageText == null
+                              ? (room.isGroup ? 'Kumpulan baharu' : 'Belum ada mesej')
+                              : '${isMineLast ? 'Anda: ' : ''}${room.previewText}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (room.hasUnread)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: scheme.primary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            room.unreadCount > 99 ? '99+' : '${room.unreadCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                   onTap: () => _openChat(context, room),
                 );
               },

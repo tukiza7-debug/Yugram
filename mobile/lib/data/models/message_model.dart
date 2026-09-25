@@ -18,11 +18,16 @@ class MessageModel extends MessageEntity {
     required super.createdAt,
     required super.updatedAt,
     super.status,
+    super.media,
+    super.forwardedFromName,
+    super.editedAt,
   });
 
   /// Struktur JSON pelayan:
   /// { id, roomId, senderId, sender: {displayName}, text, isSilent, isEdited,
-  ///   replyToMessageId, replyTo: {text}, reactions: [...], createdAt, updatedAt }
+  ///   editedAt, replyToMessageId, replyTo: {text}, reactions: [...],
+  ///   media: {url, name, mimeType, size}|null, forwardedFromName,
+  ///   createdAt, updatedAt }
   factory MessageModel.fromJson(
     Map<String, dynamic> json, {
     DeliveryStatus status = DeliveryStatus.sent,
@@ -35,6 +40,9 @@ class MessageModel extends MessageEntity {
         : <String, dynamic>{};
     final List<dynamic> rawReactions =
         (json['reactions'] is List) ? json['reactions'] as List : <dynamic>[];
+    final Map<String, dynamic> rawMedia = (json['media'] is Map<String, dynamic>)
+        ? json['media'] as Map<String, dynamic>
+        : <String, dynamic>{};
 
     return MessageModel(
       id: json['id']?.toString() ?? '',
@@ -50,6 +58,11 @@ class MessageModel extends MessageEntity {
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '') ?? DateTime.now(),
       status: status,
+      media: rawMedia.isEmpty ? null : MediaEntity.fromJson(rawMedia),
+      forwardedFromName: json['forwardedFromName']?.toString(),
+      editedAt: json['editedAt'] == null
+          ? null
+          : DateTime.tryParse(json['editedAt'].toString()),
     );
   }
 
@@ -62,6 +75,8 @@ class MessageModel extends MessageEntity {
         'isEdited': isEdited,
         'replyToMessageId': replyToMessageId,
         'reactions': ReactionList.toJsonList(reactions),
+        'media': media?.toJson(),
+        'forwardedFromName': forwardedFromName,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
       };
@@ -75,6 +90,8 @@ class MessageModel extends MessageEntity {
     required bool isSilent,
     String? replyToMessageId,
     String? replyToText,
+    MediaEntity? media,
+    String? forwardedFromName,
   }) {
     final DateTime now = DateTime.now();
     return MessageModel(
@@ -92,6 +109,8 @@ class MessageModel extends MessageEntity {
       createdAt: now,
       updatedAt: now,
       status: DeliveryStatus.sending,
+      media: media,
+      forwardedFromName: forwardedFromName,
     );
   }
 }
@@ -106,11 +125,14 @@ class RoomModel extends RoomEntity {
     super.lastMessageText,
     super.lastMessageSenderId,
     super.lastMessageAt,
+    super.unreadCount,
+    super.memberCount,
+    super.createdBy,
   });
 
   /// JSON item daripada GET /api/rooms:
-  /// { id, type, name, lastMessage: {senderId, text, createdAt},
-  ///   members: [{userId, user: {id, username, displayName}}] }
+  /// { id, type, name, createdBy, lastMessage: {senderId, text, media, createdAt},
+  ///   members: [{userId, role, user: {...}}], unreadCount }
   factory RoomModel.fromJson(Map<String, dynamic> json, {required String currentUserId}) {
     final List<dynamic> members =
         (json['members'] is List) ? json['members'] as List : <dynamic>[];
@@ -142,17 +164,30 @@ class RoomModel extends RoomEntity {
         ? (peerName?.isNotEmpty == true ? peerName! : (name.isNotEmpty ? name : 'Sembang'))
         : (name.isNotEmpty ? name : 'Kumpulan');
 
+    // FASA 2: pratonton mesej terakhir yang bermedia.
+    String? previewText;
+    final dynamic lastMedia = lastMessage['media'];
+    if (lastMedia is Map<String, dynamic> && lastMedia.isNotEmpty) {
+      final String mediaName = lastMedia['name']?.toString() ?? 'media';
+      previewText = '\u{1F4CE} $mediaName';
+    } else {
+      previewText = lastMessage['text']?.toString();
+    }
+
     return RoomModel(
       id: json['id']?.toString() ?? '',
       type: type,
       title: title,
       peerId: peerId,
       peerName: peerName,
-      lastMessageText: lastMessage['text']?.toString(),
+      lastMessageText: previewText,
       lastMessageSenderId: lastMessage['senderId']?.toString(),
       lastMessageAt: lastMessage['createdAt'] == null
           ? null
           : DateTime.tryParse(lastMessage['createdAt'].toString()),
+      unreadCount: int.tryParse(json['unreadCount']?.toString() ?? '') ?? 0,
+      memberCount: members.length,
+      createdBy: json['createdBy']?.toString(),
     );
   }
 
@@ -170,5 +205,13 @@ class RoomModel extends RoomEntity {
       <String, dynamic>{...room, 'members': members},
       currentUserId: currentUserId,
     );
+  }
+
+  /// JSON daripada GET /api/rooms/:roomId (butiran kumpulan).
+  factory RoomModel.fromDetailResponse(
+    Map<String, dynamic> body, {
+    required String currentUserId,
+  }) {
+    return RoomModel.fromDirectResponse(body, currentUserId: currentUserId);
   }
 }

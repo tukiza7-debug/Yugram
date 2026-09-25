@@ -1,5 +1,5 @@
 -- ============================================================
--- Yugram Chat Backend - Skema PostgreSQL (FASA 1)
+-- Yugram Chat Backend - Skema PostgreSQL (FASA 1 + 2 + 3)
 -- Padanan 1:1 dengan model Sequelize (src/models/*).
 -- Jalankan: psql -d yugram_chat -f database/schema.sql
 -- ============================================================
@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   username      VARCHAR(32)  NOT NULL UNIQUE,
   display_name  VARCHAR(64)  NOT NULL,
   password_hash VARCHAR(128) NOT NULL,
+  bio           VARCHAR(280),
   avatar_url    VARCHAR(512),
   last_seen_at  TIMESTAMPTZ,
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -68,18 +69,24 @@ CREATE TABLE IF NOT EXISTS messages (
   text               TEXT        NOT NULL,
   is_silent          BOOLEAN     NOT NULL DEFAULT FALSE,
   is_edited          BOOLEAN     NOT NULL DEFAULT FALSE,
+  edited_at          TIMESTAMPTZ,
   reply_to_message_id UUID       REFERENCES messages(id) ON DELETE SET NULL,
   reactions          JSONB       NOT NULL DEFAULT '[]'::jsonb,
+  -- FASA 2: lampiran media { url, name, mimeType, size }
+  media              JSONB,
+  -- FASA 3: nama paparan penghantar asal bagi mesej terusan
+  forwarded_from_name VARCHAR(64),
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT chk_messages_text_len
-    CHECK (char_length(text) BETWEEN 1 AND 4096),
+    CHECK (char_length(text) BETWEEN 0 AND 4096),
   CONSTRAINT chk_messages_reactions_json
     CHECK (jsonb_typeof(reactions) = 'array')
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_room_created ON messages (room_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages (sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_media ON messages (room_id) WHERE media IS NOT NULL;
 
 -- ------------------------------------------------------------
 -- message_reads (read receipt per-mesej => tick berganda)

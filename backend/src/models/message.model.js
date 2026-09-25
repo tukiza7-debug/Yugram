@@ -2,14 +2,19 @@
 
 /**
  * models/message.model.js
- * Model mesej mengikut spesifikasi FASA 1:
+ * Model mesej FASA 1 + 2:
  *   id, senderId, roomId, text, isSilent, isEdited, replyToMessageId,
- *   reactions (array JSONB), timestamps (createdAt/updatedAt).
+ *   reactions (array JSONB), media (JSONB), forwardedFromName, editedAt,
+ *   timestamps (createdAt/updatedAt).
  */
 
 const { DataTypes, Model } = require('sequelize');
 const { sequelize } = require('../config/database');
-const { MESSAGE_MAX_LENGTH, REACTION_MAX_LENGTH } = require('../utils/constants');
+const {
+  MESSAGE_MAX_LENGTH,
+  REACTION_MAX_LENGTH,
+  FORWARDED_FROM_MAX_LENGTH,
+} = require('../utils/constants');
 
 class Message extends Model {
   /**
@@ -44,9 +49,12 @@ class Message extends Model {
       text: this.text,
       isSilent: this.isSilent,
       isEdited: this.isEdited,
+      editedAt: iso(this.editedAt) ?? null,
       replyToMessageId: this.replyToMessageId ?? null,
       replyTo,
       reactions: Array.isArray(this.reactions) ? this.reactions : [],
+      media: this.media ?? null,
+      forwardedFromName: this.forwardedFromName ?? null,
       createdAt: iso(this.createdAt),
       updatedAt: iso(this.updatedAt),
     };
@@ -75,10 +83,12 @@ Message.init(
     text: {
       type: DataTypes.TEXT,
       allowNull: false,
+      // Rentetan kosong dibenarkan APABILA mesej mengandungi media;
+      // peraturan "teks ATAU media wajib" dikuatkuasakan di message.service.
       validate: {
         len: {
-          args: [1, MESSAGE_MAX_LENGTH],
-          msg: `Panjang mesej mesti antara 1 hingga ${MESSAGE_MAX_LENGTH} aksara`,
+          args: [0, MESSAGE_MAX_LENGTH],
+          msg: `Panjang mesej mesti antara 0 hingga ${MESSAGE_MAX_LENGTH} aksara`,
         },
       },
     },
@@ -120,6 +130,31 @@ Message.init(
           }
         },
       },
+    },
+    media: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      validate: {
+        isValidMedia(value) {
+          if (value === null || value === undefined) {
+            return;
+          }
+          if (typeof value !== 'object' || Array.isArray(value)) {
+            throw new Error('media mesti objek');
+          }
+          if (typeof value.url !== 'string' || value.url.length === 0 || value.url.length > 512) {
+            throw new Error('media.url tidak sah');
+          }
+        },
+      },
+    },
+    forwardedFromName: {
+      type: DataTypes.STRING(FORWARDED_FROM_MAX_LENGTH),
+      allowNull: true,
+    },
+    editedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   },
   {

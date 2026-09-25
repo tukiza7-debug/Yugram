@@ -11,7 +11,7 @@ import '../models/message_model.dart';
 import '../models/socket_payload_models.dart';
 
 /// Implementasi ChatRepository:
-///  - REST (senarai bilik, cipta bilik direct, sejarah) melalui ApiClient
+///  - REST (bilik, kumpulan, mesej, media) melalui ApiClient
 ///  - Strim masa nyata dari SocketService -> entiti domain untuk BLoC
 class ChatRepositoryImpl implements ChatRepository {
   ChatRepositoryImpl({
@@ -32,7 +32,7 @@ class ChatRepositoryImpl implements ChatRepository {
   String get currentUserId => _tokenStore.getUserId() ?? '';
 
   // ============================================================
-  // REST
+  // REST - FASA 1
   // ============================================================
 
   @override
@@ -98,6 +98,218 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   // ============================================================
+  // REST - FASA 2 + 3
+  // ============================================================
+
+  @override
+  Future<RoomDetailEntity> getRoomDetail(String roomId) async {
+    try {
+      final dynamic response = await _apiClient.get('/api/rooms/$roomId');
+      final Map<String, dynamic> body =
+          (response is Map<String, dynamic>) ? response : <String, dynamic>{};
+      final RoomModel room = RoomModel.fromDetailResponse(body, currentUserId: currentUserId);
+      final List<RoomMemberInfo> members = _parseMembers(body['members']);
+      return RoomDetailEntity(room: room, members: members);
+    } catch (err, stackTrace) {
+      _log.error('getRoomDetail gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<RoomEntity> createGroup({
+    required String name,
+    required List<String> memberUsernames,
+  }) async {
+    try {
+      final dynamic response = await _apiClient.post('/api/rooms/group', body: <String, dynamic>{
+        'name': name,
+        'memberUsernames': memberUsernames,
+      });
+      final Map<String, dynamic> body =
+          (response is Map<String, dynamic>) ? response : <String, dynamic>{};
+      final RoomModel room = RoomModel.fromDirectResponse(body, currentUserId: currentUserId);
+      if (room.id.isEmpty) {
+        throw StateError('Respons kumpulan tidak sah');
+      }
+      return room;
+    } catch (err, stackTrace) {
+      _log.error('createGroup gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> addMember({required String roomId, required String username}) async {
+    try {
+      await _apiClient.post('/api/rooms/$roomId/members', body: <String, dynamic>{
+        'username': username,
+      });
+    } catch (err, stackTrace) {
+      _log.error('addMember gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> removeMember({required String roomId, required String userId}) async {
+    try {
+      await _apiClient.delete('/api/rooms/$roomId/members/$userId');
+    } catch (err, stackTrace) {
+      _log.error('removeMember gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateMemberRole({
+    required String roomId,
+    required String userId,
+    required String role,
+  }) async {
+    try {
+      await _apiClient.patch('/api/rooms/$roomId/members/$userId', body: <String, dynamic>{
+        'role': role,
+      });
+    } catch (err, stackTrace) {
+      _log.error('updateMemberRole gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> leaveRoom(String roomId) async {
+    try {
+      await _apiClient.post('/api/rooms/$roomId/leave');
+    } catch (err, stackTrace) {
+      _log.error('leaveRoom gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> deleteGroup(String roomId) async {
+    try {
+      await _apiClient.delete('/api/rooms/$roomId');
+    } catch (err, stackTrace) {
+      _log.error('deleteGroup gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<RoomEntity> renameRoom({required String roomId, required String name}) async {
+    try {
+      final dynamic response = await _apiClient.patch('/api/rooms/$roomId', body: <String, dynamic>{
+        'name': name,
+      });
+      final Map<String, dynamic> body =
+          (response is Map<String, dynamic>) ? response : <String, dynamic>{};
+      return RoomModel.fromDetailResponse(body, currentUserId: currentUserId);
+    } catch (err, stackTrace) {
+      _log.error('renameRoom gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<RoomMediaItem>> getRoomMedia(String roomId) async {
+    try {
+      final dynamic response = await _apiClient.get('/api/rooms/$roomId/media');
+      final List<dynamic> rawMedia =
+          (response is Map<String, dynamic> && response['media'] is List)
+              ? response['media'] as List
+              : <dynamic>[];
+      return rawMedia.whereType<Map>().map((Map raw) {
+        final Map<String, dynamic> item = Map<String, dynamic>.from(raw);
+        final Map<String, dynamic> media =
+            (item['media'] is Map<String, dynamic>) ? item['media'] as Map<String, dynamic> : <String, dynamic>{};
+        return RoomMediaItem(
+          messageId: item['messageId']?.toString() ?? '',
+          media: MediaEntity.fromJson(media),
+          createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
+          senderName: item['senderName']?.toString(),
+        );
+      }).toList();
+    } catch (err, stackTrace) {
+      _log.error('getRoomMedia gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<MessageEntity> editMessage({required String messageId, required String text}) async {
+    try {
+      final dynamic response = await _apiClient.patch('/api/messages/$messageId', body: <String, dynamic>{
+        'text': text,
+      });
+      final Map<String, dynamic> body =
+          (response is Map<String, dynamic>) ? response : <String, dynamic>{};
+      final Map<String, dynamic> rawMessage =
+          (body['message'] is Map<String, dynamic>) ? body['message'] as Map<String, dynamic> : <String, dynamic>{};
+      return MessageModel.fromJson(rawMessage);
+    } catch (err, stackTrace) {
+      _log.error('editMessage gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> deleteMessage(String messageId) async {
+    try {
+      await _apiClient.delete('/api/messages/$messageId');
+    } catch (err, stackTrace) {
+      _log.error('deleteMessage gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<MessageEntity>> searchMessages(
+    String roomId,
+    String query, {
+    int limit = 30,
+  }) async {
+    try {
+      final dynamic response = await _apiClient.get(
+        '/api/rooms/$roomId/messages',
+        query: <String, String>{'q': query, 'limit': '$limit'},
+      );
+      final List<dynamic> rawMessages =
+          (response is Map<String, dynamic> && response['messages'] is List)
+              ? response['messages'] as List
+              : <dynamic>[];
+      return rawMessages
+          .whereType<Map>()
+          .map((Map raw) => MessageModel.fromJson(Map<String, dynamic>.from(raw)) as MessageEntity)
+          .toList();
+    } catch (err, stackTrace) {
+      _log.error('searchMessages gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<MediaEntity> uploadMedia(String filePath, {String? displayName}) async {
+    try {
+      final Map<String, dynamic> response = await _apiClient.uploadMedia(
+        '/api/media',
+        filePath,
+        displayName: displayName,
+      );
+      final Map<String, dynamic> rawMedia =
+          (response['media'] is Map<String, dynamic>) ? response['media'] as Map<String, dynamic> : <String, dynamic>{};
+      if (rawMedia.isEmpty || rawMedia['url'] == null) {
+        throw StateError('Respons media tidak sah');
+      }
+      return MediaEntity.fromJson(rawMedia);
+    } catch (err, stackTrace) {
+      _log.error('uploadMedia gagal', err, stackTrace);
+      rethrow;
+    }
+  }
+
+  // ============================================================
   // STRIM MASA NYATA (menyalurkan SocketService -> domain)
   // ============================================================
 
@@ -157,6 +369,33 @@ class ChatRepositoryImpl implements ChatRepository {
             message: payload.message,
           ));
 
+  @override
+  Stream<MessageEditedEvent> get messageEdited => _socketService.onMessageEdited
+      .map((MessageEditedPayload payload) => MessageEditedEvent(
+            roomId: payload.roomId,
+            message: payload.message,
+          ));
+
+  @override
+  Stream<MessageDeletedEvent> get messageDeleted => _socketService.onMessageDeleted
+      .map((MessageDeletedPayload payload) => MessageDeletedEvent(
+            roomId: payload.roomId,
+            messageId: payload.messageId,
+          ));
+
+  @override
+  Stream<RoomUpdatedEvent> get roomUpdated => _socketService.onRoomUpdated
+      .map((RoomUpdatedPayload payload) => RoomUpdatedEvent(
+            room: payload.room,
+            members: payload.members,
+          ));
+
+  @override
+  Stream<RoomDeletedEvent> get roomDeleted =>
+      _socketService.onRoomDeleted.map((RoomDeletedPayload payload) => RoomDeletedEvent(
+            roomId: payload.roomId,
+          ));
+
   // ============================================================
   // AKSI (emit)
   // ============================================================
@@ -171,6 +410,8 @@ class ChatRepositoryImpl implements ChatRepository {
     required String tempId,
     bool isSilent = false,
     String? replyToMessageId,
+    MediaEntity? media,
+    String? forwardedFromName,
   }) =>
       _socketService.emitSendMessage(
         roomId: roomId,
@@ -178,6 +419,8 @@ class ChatRepositoryImpl implements ChatRepository {
         tempId: tempId,
         isSilent: isSilent,
         replyToMessageId: replyToMessageId,
+        media: media,
+        forwardedFromName: forwardedFromName,
       );
 
   @override
@@ -191,4 +434,18 @@ class ChatRepositoryImpl implements ChatRepository {
   @override
   bool toggleReaction({required String messageId, required String emoji}) =>
       _socketService.emitAddReaction(messageId: messageId, emoji: emoji);
+
+  // ============================================================
+  // UTILITI
+  // ============================================================
+
+  /// Mengurai senarai ahli {userId, role, user} daripada respons REST.
+  List<RoomMemberInfo> _parseMembers(dynamic raw) {
+    final List<dynamic> list = (raw is List) ? raw : <dynamic>[];
+    return list
+        .whereType<Map>()
+        .map((Map rawMember) => RoomMemberPayload.fromJson(Map<String, dynamic>.from(rawMember)))
+        .map((RoomMemberPayload member) => member.toMemberInfo())
+        .toList();
+  }
 }

@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../core/constants/app_constants.dart';
-import '../../core/network/socket_connection_state.dart';
-import '../../core/utils/app_logger.dart';
-import '../../domain/entities/message_entity.dart';
-import '../../domain/entities/realtime_events.dart';
-import '../../domain/repositories/chat_repository.dart';
+import '../../../core/error/app_exception.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/network/socket_connection_state.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../domain/entities/message_entity.dart';
+import '../../../domain/entities/realtime_events.dart';
+import '../../../domain/entities/room_entity.dart';
+import '../../../domain/repositories/chat_repository.dart';
 import 'chat_event.dart';
 import 'chat_state.dart';
 
@@ -38,6 +40,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ReplyTargetChanged>(_onReplyTargetChanged);
     on<DismissError>(_onDismissError);
 
+    // FASA 3 - edit & padam mesej
+    on<MessageEditStarted>(_onMessageEditStarted);
+    on<MessageEditDismissed>(_onMessageEditDismissed);
+    on<MessageEditSubmitted>(_onMessageEditSubmitted);
+    on<MessageDeleteRequested>(_onMessageDeleteRequested);
+
     on<RoomHistoryLoaded>(_onRoomHistoryLoaded);
     on<IncomingMessageReceived>(_onIncomingMessage);
     on<MessageAckReceived>(_onMessageAck);
@@ -47,6 +55,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ConnectionStateChanged>(_onConnectionChanged);
     on<SendFailed>(_onSendFailed);
     on<ErrorReceived>(_onErrorReceived);
+
+    // FASA 2 + 3 - strim baharu
+    on<MessageEditedReceived>(_onMessageEdited);
+    on<MessageDeletedReceived>(_onMessageDeleted);
+    on<RoomUpdatedReceived>(_onRoomUpdated);
+    on<RoomDeletedReceived>(_onRoomDeleted);
 
     // Langganan semua strim masa nyata -> event dalaman BLoC.
     _subscriptions = <StreamSubscription<dynamic>>[
@@ -83,6 +97,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         (ChatErrorEvent event) => _safeAddEvent(ErrorReceived(message: event.message)),
         onError: _onStreamError,
       ),
+      // FASA 2 + 3
+      repository.messageEdited.listen(
+        (MessageEditedEvent event) => _safeAddEvent(MessageEditedReceived(event: event)),
+        onError: _onStreamError,
+      ),
+      repository.messageDeleted.listen(
+        (MessageDeletedEvent event) => _safeAddEvent(MessageDeletedReceived(event: event)),
+        onError: _onStreamError,
+      ),
+      repository.roomUpdated.listen(
+        (RoomUpdatedEvent event) => _safeAddEvent(RoomUpdatedReceived(event: event)),
+        onError: _onStreamError,
+      ),
+      repository.roomDeleted.listen(
+        (RoomDeletedEvent event) => _safeAddEvent(RoomDeletedReceived(event: event)),
+        onError: _onStreamError,
+      ),
     ];
   }
 
@@ -109,7 +140,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _onMessageSubmitted(MessageSubmitted event, Emitter<ChatState> emit) async {
     final String text = event.text.trim();
-    if (text.isEmpty || text.length > AppConstants.messageMaxLength) {
+    final MediaEntity? media = event.media is MediaEntity ? event.media as MediaEntity : null;
+    if ((text.isEmpty && media == null) || text.length > AppConstants.messageMaxLength) {
       return;
     }
 
@@ -126,19 +158,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       isSilent: event.isSilent,
       replyToMessageId: replyId,
       replyToText: replyText,
+      media: media,
+      forwardedFromName: event.forwardedFromName,
     );
     emit(state.copyWith(messages: <MessageEntity>[...state.messages, optimistic], clearReply: true));
 
     // 2) Berhenti menaip sebaik mesej dihantar.
     _sendTyping(false);
 
-    // 3) Emit ke pelayan (Fitur 10 + 64).
+    // 3) Emit ke pelayan (Fitur 10 + 64 + FASA 2/3).
     final bool emitted = repository.sendMessage(
       roomId: roomId,
       text: text,
       tempId: tempId,
       isSilent: event.isSilent,
       replyToMessageId: replyId,
+      media: media,
+      forwardedFromName: event.forwardedFromName,
     );
     if (!emitted) {
       add(SendFailed(tempId: tempId, reason: 'Tidak disambungkan ke pelayan'));
@@ -194,6 +230,78 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _onDismissError(DismissError event, Emitter<ChatState> emit) async {
     emit(state.copyWith(clearError: true));
+  }
+
+  // ============================================================
+  // FASA 3 - EDIT & PADAM MESEJ
+  // ============================================================
+
+  Future<void> _onMessageEditStarted(MessageEditStarted event, Emitter<ChatState> emit) async {
+    emit(state.copyWith(editingMessageId: event.messageId));
+  }
+
+  Future<void> _onMessageEditDismissed(MessageEditDismissed event, Emitter<ChatState> emit) async {
+    emit(state.copyWith(clearEditing: true));
+  }
+
+  Future<void> _onMessageEditSubmitted(MessageEditSubmitted event, Emitter<ChatState> emit) async {
+    final String text = event.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    emit(state.copyWith(clearEditing: true));
+    try {
+      final MessageEntity updated = await repository.editMessage(
+        messageId: event.messageId,
+        text: text,
+      );
+      if (isClosed) {
+        return;
+      }
+      // Broadcast message_edited turut tiba - upsert ini idempoten.
+      final List<MessageEntity> messages = state.messages
+          .map((MessageEntity message) => message.id == updated.id
+              ? updated.copyWith(status: message.status)
+              : message)
+          .toList();
+      emit(state.copyWith(messages: messages));
+    } on ApiException catch (err) {
+      if (isClosed) {
+        return;
+      }
+      emit(state.copyWith(errorMessage: err.message));
+    } catch (err, stackTrace) {
+      _log.error('Edit mesej gagal', err, stackTrace);
+      if (isClosed) {
+        return;
+      }
+      emit(state.copyWith(errorMessage: 'Edit mesej gagal'));
+    }
+  }
+
+  Future<void> _onMessageDeleteRequested(MessageDeleteRequested event, Emitter<ChatState> emit) async {
+    try {
+      await repository.deleteMessage(event.messageId);
+      // Broadcast message_deleted mengemas kini senarai; buang awal untuk UX.
+      final List<MessageEntity> messages = state.messages
+          .where((MessageEntity message) => message.id != event.messageId)
+          .toList();
+      if (isClosed) {
+        return;
+      }
+      emit(state.copyWith(messages: messages));
+    } on ApiException catch (err) {
+      if (isClosed) {
+        return;
+      }
+      emit(state.copyWith(errorMessage: err.message));
+    } catch (err, stackTrace) {
+      _log.error('Padam mesej gagal', err, stackTrace);
+      if (isClosed) {
+        return;
+      }
+      emit(state.copyWith(errorMessage: 'Padam mesej gagal'));
+    }
   }
 
   // ============================================================
@@ -349,6 +457,53 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _onErrorReceived(ErrorReceived event, Emitter<ChatState> emit) async {
     emit(state.copyWith(errorMessage: event.message));
+  }
+
+  // ============================================================
+  // FASA 2 + 3 - EVENT BAHARU
+  // ============================================================
+
+  Future<void> _onMessageEdited(MessageEditedReceived event, Emitter<ChatState> emit) async {
+    final MessageEditedEvent edited = event.event;
+    if (edited.roomId != roomId) {
+      return;
+    }
+    final List<MessageEntity> messages = <MessageEntity>[];
+    for (final MessageEntity message in state.messages) {
+      if (message.id == edited.message.id) {
+        messages.add(edited.message.copyWith(status: message.status));
+      } else {
+        messages.add(message);
+      }
+    }
+    emit(state.copyWith(messages: messages));
+  }
+
+  Future<void> _onMessageDeleted(MessageDeletedReceived event, Emitter<ChatState> emit) async {
+    final MessageDeletedEvent deleted = event.event;
+    if (deleted.roomId != roomId) {
+      return;
+    }
+    final List<MessageEntity> messages = state.messages
+        .where((MessageEntity message) => message.id != deleted.messageId)
+        .toList();
+    emit(state.copyWith(messages: messages));
+  }
+
+  Future<void> _onRoomUpdated(RoomUpdatedReceived event, Emitter<ChatState> emit) async {
+    final RoomUpdatedEvent updated = event.event;
+    if (updated.room.id != roomId) {
+      return;
+    }
+    emit(state.copyWith(roomTitle: updated.room.title));
+  }
+
+  Future<void> _onRoomDeleted(RoomDeletedReceived event, Emitter<ChatState> emit) async {
+    final RoomDeletedEvent deleted = event.event;
+    if (deleted.roomId != roomId) {
+      return;
+    }
+    emit(state.copyWith(roomDeleted: true, errorMessage: 'Kumpulan telah dipadam'));
   }
 
   // ============================================================

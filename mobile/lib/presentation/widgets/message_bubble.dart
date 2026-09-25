@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../domain/entities/message_entity.dart';
 
 /// Ikon tick status penghantaran:
@@ -25,8 +26,8 @@ class TickIndicator extends StatelessWidget {
   }
 }
 
-/// Gelebal mesej dengan: nama penghantar, petikan balasan, teks,
-/// reaksi (grup ikon), masa + ikon senyap + tick.
+/// Gelebal mesej dengan: nama penghantar, label terusan, petikan balasan,
+/// media (imej/fail), teks, reaksi, masa + ikon senyap + tick + label edit.
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
     required this.message,
@@ -34,6 +35,7 @@ class MessageBubble extends StatelessWidget {
     required this.myUserId,
     required this.onLongPress,
     required this.onRetryTap,
+    required this.onMediaTap,
     super.key,
   });
 
@@ -42,6 +44,7 @@ class MessageBubble extends StatelessWidget {
   final String myUserId;
   final VoidCallback onLongPress;
   final VoidCallback onRetryTap;
+  final VoidCallback onMediaTap;
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +92,22 @@ class MessageBubble extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (message.forwardedFromName != null &&
+                  message.forwardedFromName!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(Icons.reply, size: 12, color: subtleTextColor),
+                      const SizedBox(width: 3),
+                      Text(
+                        'Diteruskan dari ${message.forwardedFromName}',
+                        style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: subtleTextColor),
+                      ),
+                    ],
+                  ),
+                ),
               if (message.replyToText != null && message.replyToText!.isNotEmpty)
                 Container(
                   margin: const EdgeInsets.only(bottom: 4),
@@ -105,10 +124,15 @@ class MessageBubble extends StatelessWidget {
                     style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: textColor),
                   ),
                 ),
-              Text(
-                message.text,
-                style: TextStyle(fontSize: 15, color: textColor, height: 1.3),
-              ),
+              if (message.hasMedia) ...<Widget>[
+                _buildMedia(context, scheme),
+                if (message.text.isNotEmpty) const SizedBox(height: 4),
+              ],
+              if (message.text.isNotEmpty)
+                Text(
+                  message.text,
+                  style: TextStyle(fontSize: 15, color: textColor, height: 1.3),
+                ),
               if (message.reactions.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -135,12 +159,101 @@ class MessageBubble extends StatelessWidget {
                       DateFormat('HH:mm').format(message.createdAt.toLocal()),
                       style: TextStyle(fontSize: 11, color: subtleTextColor),
                     ),
+                    if (message.isEdited) ...<Widget>[
+                      const SizedBox(width: 4),
+                      Text(
+                        'diedit',
+                        style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: subtleTextColor),
+                      ),
+                    ],
                     if (isMine) ...<Widget>[const SizedBox(width: 4), TickIndicator(status: message.status)],
                   ],
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Lampiran media: imej dipaparkan inline; video/pdf sebagai kad fail.
+  Widget _buildMedia(BuildContext context, ColorScheme scheme) {
+    final MediaEntity media = message.media!;
+    if (media.isImage) {
+      return GestureDetector(
+        onTap: onMediaTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            AppConstants.mediaUrl(media.url),
+            width: 240,
+            fit: BoxFit.cover,
+            loadingBuilder: (BuildContext context, Widget child, ImageChunkEvent? progress) {
+              if (progress == null) return child;
+              return Container(
+                width: 240,
+                height: 160,
+                color: Colors.black12,
+                child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              );
+            },
+            errorBuilder: (BuildContext context, Object error, StackTrace? stack) {
+              return Container(
+                width: 240,
+                height: 100,
+                color: Colors.black12,
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(Icons.broken_image, size: 20),
+                    const SizedBox(width: 6),
+                    const Text('Imej tidak dapat dipaparkan', style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: onMediaTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: (isMine ? Colors.white : scheme.primary).withOpacity(0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              media.isVideo ? Icons.movie : Icons.picture_as_pdf,
+              size: 26,
+              color: isMine ? scheme.onPrimary : scheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    media.name.isNotEmpty ? media.name : 'Fail',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
+                  ),
+                  if (media.readableSize.isNotEmpty)
+                    Text(
+                      media.readableSize,
+                      style: TextStyle(fontSize: 11, color: subtleTextColor),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

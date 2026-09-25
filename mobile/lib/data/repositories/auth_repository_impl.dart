@@ -66,7 +66,7 @@ class AuthRepositoryImpl implements AuthRepository {
       if (session == null) {
         return null;
       }
-      _socketService.connect(baseUrl: _baseUrl, token: session['token']!);
+      _socketService.connect(baseUrl: _baseUrl, token: session['token']!, userId: session['userId']);
       return AuthSession(token: session['token']!, userId: session['userId']!);
     } catch (err, stackTrace) {
       _log.error('Pemulihan sesi gagal', err, stackTrace);
@@ -96,7 +96,7 @@ class AuthRepositoryImpl implements AuthRepository {
         message: 'Sesi gagal disimpan pada peranti',
       );
     }
-    _socketService.connect(baseUrl: _baseUrl, token: session['token']!);
+    _socketService.connect(baseUrl: _baseUrl, token: session['token']!, userId: session['userId']);
     return AuthSession(token: session['token']!, userId: session['userId']!);
   }
 }

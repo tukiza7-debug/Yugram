@@ -15,8 +15,11 @@ const log = logger.child('DbSync');
 (async () => {
   try {
     await sequelize.authenticate();
-    await sequelize.sync();
-    log.info('Skema database disegerakkan (mod development)');
+    // alter: true - lajur/jadual baharu FASA 2+3 ditambah pada skema sedia
+    // ada tanpa membuang data pembangunan. Untuk production gunakan
+    // database/schema.sql (DDL penuh).
+    await sequelize.sync({ alter: true });
+    log.info('Skema database disegerakkan (mod development, alter:true)');
     await sequelize.close();
     process.exit(0);
   } catch (err) {

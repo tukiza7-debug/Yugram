@@ -3,14 +3,14 @@
 class AppEvents {
   AppEvents._();
 
-  // Client -> Server
+  // Client -> Server (FASA 1)
   static const String joinRoom = 'join_room';
   static const String sendMessage = 'send_message';
   static const String messageRead = 'message_read';
   static const String typingStatus = 'typing_status';
   static const String addReaction = 'add_reaction';
 
-  // Server -> Client
+  // Server -> Client (FASA 1)
   static const String connectionReady = 'connection_ready';
   static const String roomJoined = 'room_joined';
   static const String newMessage = 'new_message';
@@ -18,6 +18,12 @@ class AppEvents {
   static const String readReceipt = 'read_receipt';
   static const String reactionUpdated = 'reaction_updated';
   static const String error = 'error';
+
+  // Server -> Client (FASA 2 + 3)
+  static const String messageEdited = 'message_edited';
+  static const String messageDeleted = 'message_deleted';
+  static const String roomUpdated = 'room_updated';
+  static const String roomDeleted = 'room_deleted';
 }
 
 class AppConstants {
@@ -30,11 +36,22 @@ class AppConstants {
     defaultValue: 'http://10.0.2.2:4000',
   );
 
+  /// Menukar URL media relatif ('/uploads/x.png') kepada URL penuh.
+  static String mediaUrl(String relativeOrAbsolute) {
+    if (relativeOrAbsolute.startsWith('http')) {
+      return relativeOrAbsolute;
+    }
+    return '$apiBaseUrl$relativeOrAbsolute';
+  }
+
   static const List<String> defaultReactions = <String>[
     '👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '🎉',
   ];
 
   static const int messageMaxLength = 4096;
+
+  /// Had saiz muat naik media (selari MEDIA_MAX_SIZE_MB pelayan).
+  static const int mediaMaxSizeBytes = 10 * 1024 * 1024;
 
   /// Selang minimum antara event typing=true yang berturutan.
   static const Duration typingThrottle = Duration(milliseconds: 1500);

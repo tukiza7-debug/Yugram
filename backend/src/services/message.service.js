@@ -10,6 +10,8 @@ const config = require('../config/env');
 const ApiError = require('../utils/apiError');
 const logger = require('../utils/logger');
 const rateLimiter = require('../utils/rateLimiter');
+const { SOCKET_EVENTS } = require('../utils/constants');
+const socketGateway = require('../sockets/socketGateway');
 const messageRepository = require('../repositories/message.repository');
 const roomRepository = require('../repositories/room.repository');
 const roomService = require('./room.service');
@@ -19,15 +21,26 @@ const log = logger.child('MessageService');
 
 class MessageService {
   /**
-   * Fitur 10 + 64: Hantar mesej (1-ke-1) dengan bendera silent.
-   * Aliran tick tunggal: mesej berjaya disimpan => ack kepada penghantar.
+   * Fitur 10 + 64 + FASA 2/3: Hantar mesej (direct @ kumpulan) dengan
+   * bendera silent, media, reply dan label terusan (forwardedFromName).
+   * Peraturan kandungan: teks ATAU media wajib ada.
    * @param {{roomId: string, senderId: string, text: string,
    *          isSilent: boolean, replyToMessageId: string|null,
+   *          media: object|null, forwardedFromName: string|null,
    *          tempId: string|null}} input
    * @returns {Promise<{message: object, tempId: string|null}>}
-   * @throws {ApiError} 429 rate limit, 403 bukan ahli, 400 reply tidak sah
+   * @throws {ApiError} 429 rate limit, 403 bukan ahli, 400 reply/kandungan tidak sah
    */
-  async sendMessage({ roomId, senderId, text, isSilent, replyToMessageId, tempId }) {
+  async sendMessage({
+    roomId,
+    senderId,
+    text,
+    isSilent,
+    replyToMessageId,
+    media,
+    forwardedFromName,
+    tempId,
+  }) {
     const limitResult = rateLimiter.tryConsume(`send:${senderId}`);
     if (!limitResult.allowed) {
       throw ApiError.tooManyRequests(
@@ -36,6 +49,12 @@ class MessageService {
     }
 
     await roomService.assertMembership(roomId, senderId);
+
+    const trimmedText = typeof text === 'string' ? text.trim() : '';
+    const hasMedia = media !== null && media !== undefined;
+    if (trimmedText.length === 0 && !hasMedia) {
+      throw ApiError.badRequest('Mesej mesti mengandungi teks atau media');
+    }
 
     if (replyToMessageId) {
       const parent = await messageRepository.findById(replyToMessageId);
@@ -47,9 +66,11 @@ class MessageService {
     const message = await messageRepository.createMessage({
       roomId,
       senderId,
-      text,
+      text: trimmedText,
       isSilent: Boolean(isSilent),
       replyToMessageId: replyToMessageId || null,
+      media: hasMedia ? media : null,
+      forwardedFromName: forwardedFromName || null,
     });
     const payload = message.toPayloadJSON();
 
@@ -185,6 +206,84 @@ class MessageService {
       hasMore: result.hasMore,
       nextBefore: result.nextBefore,
     };
+  }
+
+  /**
+   * FASA 3: Edit mesej sendiri (isEdited=true + editedAt). Broadcast
+   * `message_edited` dihantar kepada seluruh bilik termasuk penghantar
+   * supaya peranti lain turut dikemas kini.
+   * @param {{messageId: string, userId: string, text: string}} input
+   * @returns {Promise<object>} payload mesej selepas edit
+   */
+  async editMessage({ messageId, userId, text }) {
+    const message = await messageRepository.findById(messageId);
+    if (!message) {
+      throw ApiError.notFound('Mesej tidak dijumpai');
+    }
+    if (message.senderId !== userId) {
+      throw ApiError.forbidden('Hanya penghantar mesej boleh mengeditnya');
+    }
+    const updated = await messageRepository.updateText(messageId, text);
+    const payload = updated.toPayloadJSON();
+    socketGateway.publishToRoom(payload.roomId, SOCKET_EVENTS.MESSAGE_EDITED, {
+      roomId: payload.roomId,
+      message: payload,
+    });
+    log.info('Mesej diedit', { messageId, userId, roomId: payload.roomId });
+    return payload;
+  }
+
+  /**
+   * FASA 3: Padam mesej sendiri; admin kumpulan boleh memadam mesej
+   * ahli lain. Broadcast `message_deleted` kepada seluruh bilik.
+   * @param {{messageId: string, userId: string}} input
+   * @returns {Promise<{messageId: string, roomId: string}>}
+   */
+  async deleteMessage({ messageId, userId }) {
+    const message = await messageRepository.findById(messageId);
+    if (!message) {
+      throw ApiError.notFound('Mesej tidak dijumpai');
+    }
+    await roomService.assertMembership(message.roomId, userId);
+
+    if (message.senderId !== userId) {
+      const role = await roomRepository.getMemberRole(message.roomId, userId);
+      if (role !== 'admin') {
+        throw ApiError.forbidden('Hanya penghantar atau admin boleh memadam mesej ini');
+      }
+    }
+
+    const roomId = await messageRepository.deleteById(messageId);
+    socketGateway.publishToRoom(roomId, SOCKET_EVENTS.MESSAGE_DELETED, {
+      roomId,
+      messageId,
+      deletedBy: userId,
+    });
+    log.info('Mesej dipadam', { messageId, userId, roomId });
+    return { messageId, roomId };
+  }
+
+  /**
+   * FASA 3: Carian mesej dalam bilik mengikut kata kunci.
+   * @param {{roomId: string, userId: string, query: string, limit?: number}} input
+   * @returns {Promise<object[]>}
+   */
+  async searchMessages({ roomId, userId, query, limit = 30 }) {
+    await roomService.assertMembership(roomId, userId);
+    const rows = await messageRepository.searchMessages(roomId, query, {
+      limit: Math.min(Math.max(Number.parseInt(limit, 10) || 30, 1), 100),
+    });
+    return rows.map((message) => message.toPayloadJSON());
+  }
+
+  /**
+   * FASA 2: Senarai media dalam bilik (untuk muat turun pukal).
+   * @param {{roomId: string, userId: string}} input
+   * @returns {Promise<Array<object>>}
+   */
+  async listRoomMedia({ roomId, userId }) {
+    await roomService.assertMembership(roomId, userId);
+    return messageRepository.listMedia(roomId);
   }
 }
 

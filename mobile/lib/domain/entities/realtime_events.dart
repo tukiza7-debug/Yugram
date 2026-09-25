@@ -91,3 +91,50 @@ class ChatErrorEvent extends Equatable {
   @override
   List<Object?> get props => <Object?>[code, message];
 }
+
+// ---------------------------------------------------------------------------
+// FASA 2 + 3
+// ---------------------------------------------------------------------------
+
+/// Mesej telah diedit oleh penghantarnya (payload = mesej penuh terkini).
+class MessageEditedEvent extends Equatable {
+  const MessageEditedEvent({required this.roomId, required this.message});
+
+  final String roomId;
+  final MessageEntity message;
+
+  @override
+  List<Object?> get props => <Object?>[roomId, message];
+}
+
+/// Mesej telah dipadam.
+class MessageDeletedEvent extends Equatable {
+  const MessageDeletedEvent({required this.roomId, required this.messageId});
+
+  final String roomId;
+  final String messageId;
+
+  @override
+  List<Object?> get props => <Object?>[roomId, messageId];
+}
+
+/// Metadata kumpulan berubah (nama / keahlian).
+class RoomUpdatedEvent extends Equatable {
+  const RoomUpdatedEvent({required this.room, required this.members});
+
+  final RoomEntity room;
+  final List<RoomMemberInfo> members;
+
+  @override
+  List<Object?> get props => <Object?>[room, members];
+}
+
+/// Kumpulan telah dipadam (oleh pencipta atau kosong).
+class RoomDeletedEvent extends Equatable {
+  const RoomDeletedEvent({required this.roomId});
+
+  final String roomId;
+
+  @override
+  List<Object?> get props => <Object?>[roomId];
+}

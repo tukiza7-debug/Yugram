@@ -29,6 +29,61 @@ class ApiClient {
   Future<dynamic> post(String path, {Map<String, dynamic>? body}) =>
       _request('POST', path, body: body);
 
+  Future<dynamic> patch(String path, {Map<String, dynamic>? body}) =>
+      _request('PATCH', path, body: body);
+
+  Future<dynamic> delete(String path) => _request('DELETE', path);
+
+  String get baseUrl => _baseUrl;
+
+  /// FASA 2: Muat naik media multipart ke [path] (cth. '/api/media').
+  /// @returns respons JSON pelayan, cth. {'media': {url, name, mimeType, size}}
+  Future<Map<String, dynamic>> uploadMedia(
+    String path,
+    String filePath, {
+    String? displayName,
+  }) async {
+    try {
+      final Uri uri = Uri.parse('$_baseUrl$path');
+      final http.MultipartRequest request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer ${_tokenStore.getToken() ?? ''}'
+        ..files.add(
+          await http.MultipartFile.fromPath('file', filePath),
+        );
+      if (displayName != null && displayName.trim().isNotEmpty) {
+        request.fields['name'] = displayName.trim();
+      }
+
+      final http.StreamedResponse streamed =
+          await request.send().timeout(AppConstants.apiTimeout);
+      final http.Response response = await http.Response.fromStream(streamed);
+      final dynamic decoded = _handleResponse(response, 'POST', path);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      throw ApiException(
+        statusCode: 500,
+        code: 'BAD_MEDIA_RESPONSE',
+        message: 'Respons muat naik media tidak sah',
+      );
+    } on TimeoutException {
+      throw ApiException(
+        statusCode: 0,
+        code: 'TIMEOUT',
+        message: 'Muat naik tamat masa - cuba fail yang lebih kecil',
+      );
+    } on ApiException {
+      rethrow;
+    } catch (err) {
+      _log.error('Muat naik media gagal', err);
+      throw ApiException(
+        statusCode: 0,
+        code: 'UPLOAD_FAILED',
+        message: 'Muat naik media gagal: $err',
+      );
+    }
+  }
+
   Future<dynamic> _request(
     String method,
     String path, {
@@ -54,6 +109,12 @@ class ApiClient {
             .timeout(AppConstants.apiTimeout);
       } else if (method == 'GET') {
         response = await _client.get(resolved, headers: headers).timeout(AppConstants.apiTimeout);
+      } else if (method == 'PATCH') {
+        response = await _client
+            .patch(resolved, headers: headers, body: body != null ? jsonEncode(body) : null)
+            .timeout(AppConstants.apiTimeout);
+      } else if (method == 'DELETE') {
+        response = await _client.delete(resolved, headers: headers).timeout(AppConstants.apiTimeout);
       } else {
         throw ApiException(
           statusCode: 0,
